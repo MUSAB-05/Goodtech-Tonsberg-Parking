@@ -14,6 +14,15 @@ test('backend creates missing monthly shard then reads it', async()=>{
   assert.equal(calls[1].headers['X-Mantle-Key'],'test-key');
 });
 
+test('backend invokes fetch with globalThis receiver like browser window.fetch requires', async()=>{
+  function browserLikeFetch(){
+    if(this!==globalThis) throw new TypeError('Illegal invocation');
+    return Promise.resolve(response(200,{}));
+  }
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl:browserLikeFetch});
+  assert.deepEqual(await backend.getBookings(['2026-09']),{});
+});
+
 test('backend merges cross-month shards', async()=>{
   const fetchImpl=async url=>response(200,url.endsWith('2026-08')?{'2026-08-31__mg-50':{driverId:'a'}}:{'2026-09-01__mg-51':{driverId:'b'}});
   const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl});
