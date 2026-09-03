@@ -1,7 +1,11 @@
 # One employee per line. Lines beginning with # are ignored.
+Emil
 Mustafa
-Kevin
-Jimmy
-Lene
-Thor
-Helene
+Asgeir
+Jørgen
+Edward
+August
+Jan
+Patrik
+Jens
+GUEST
