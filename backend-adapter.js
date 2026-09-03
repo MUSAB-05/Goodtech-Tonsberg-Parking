@@ -68,13 +68,36 @@ export class ParkingBackend {
   async patchMonth(month, changes) {
     const clean = changes && typeof changes === 'object' ? changes : {};
     if (!Object.keys(clean).length) return;
-    await this.ensureMonth(month);
-    await this.request(this.path(month), { method: 'PATCH', body: clean });
+    try {
+      await this.request(this.path(month), { method: 'PATCH', body: clean });
+    } catch (error) {
+      if (error.status !== 404) throw error;
+      await this.request(this.path(month), { method: 'POST', body: {} });
+      await this.request(this.path(month), { method: 'PATCH', body: clean });
+    }
+  }
+
+  valuesMatch(actual, expected) {
+    const normalize = value => value == null ? null : value;
+    return JSON.stringify(normalize(actual)) === JSON.stringify(normalize(expected));
   }
 
   async setBooking(key, booking) {
     const month = String(key).slice(0, 7);
-    await this.patchMonth(month, { [key]: booking || null });
+    const desired = booking ?? null;
+    try {
+      await this.patchMonth(month, { [key]: desired });
+      return;
+    } catch (error) {
+      // A browser/proxy can occasionally lose the PATCH response after Mantle has already saved it.
+      // Verify remote state before declaring the write failed so the local retry queue cannot stick forever.
+      try {
+        const remote = await this.request(this.path(month));
+        const actual = Object.prototype.hasOwnProperty.call(remote || {}, key) ? remote[key] : null;
+        if (this.valuesMatch(actual, desired)) return;
+      } catch {}
+      throw error;
+    }
   }
 
   async setBookings(changes) {
