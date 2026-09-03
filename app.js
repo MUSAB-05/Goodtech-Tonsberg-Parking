@@ -1,21 +1,25 @@
 import { APP_CONFIG } from './config.js';
 import { ParkingBackend } from './backend-adapter.js';
 import { ParkingMap } from './parking-map.js';
+import { MeetingRoomView } from './meeting-room.js';
+import { RoomDialogController } from './room-dialog-controller.js';
+import { ScheduleView } from './schedule-view.js';
 import {
-  addDays, bookingKey, bookingsForDate, duplicateAssignments, flattenSpaces,
-  formatDate, groupUsage, initialWeekDate, isoWeek, isoWeekYear, monthKey, parseDrivers, weekDates
+  addDays, bookingKey, bookingsForDate, duplicateAssignments, flattenSpaces, formatDate, groupUsage,
+  initialWeekDate, isoWeek, isoWeekYear, monthKey, parseDrivers, weekDates
 } from './booking-utils.js';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 const state = {
-  groups: [], drivers: [], spaces: [], bookings: {}, week: [], selectedDate: '', selectedSpace: null
+  groups: [], meetingRoom: null, drivers: [], spaces: [], bookings: {}, week: [], selectedDate: '', today: '', selectedSpace: null
 };
 let refreshInFlight = false;
 let mutationsInFlight = 0;
 let lastFingerprint = '';
 let installPrompt = null;
+let lastConnectionError = '';
 
 const backend = new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
@@ -25,6 +29,16 @@ const backend = new ParkingBackend({
 const map = new ParkingMap($('#parking-map'), {
   onSelect: openPicker,
   onDateChange: changeMapDate
+});
+
+const roomView = new MeetingRoomView($('#meeting-room'), {
+  onFreeSlot: (hour, date) => roomController.openBooking(hour, date),
+  onBookingClick: (key, date) => roomController.openDetails(key, date)
+});
+
+const scheduleView = new ScheduleView($('#schedule'), {
+  state, dayBookings, duplicatesFor, openPicker, selectDate,
+  openRoomDetails: (key, date) => roomController.openDetails(key, date)
 });
 
 function osloNow() {
@@ -46,10 +60,13 @@ function dayBookings(date) { return bookingsForDate(state.bookings, date, state.
 function duplicatesFor(date) { return duplicateAssignments(dayBookings(date)); }
 function visibleMonths() { return [...new Set(state.week.map(monthKey))]; }
 
-function setConnection(label, status) {
+function setConnection(label, status = '', detail = '') {
   const element = $('#connection');
   element.textContent = label;
-  element.className = `connection ${status || ''}`;
+  element.className = `connection ${status}`.trim();
+  element.title = detail || label;
+  if (status === 'live') lastConnectionError = '';
+  else if (detail) lastConnectionError = detail;
 }
 
 function toast(message) {
@@ -67,8 +84,9 @@ function render() {
   $('#selected-date-title').textContent = formatDate(state.selectedDate, { weekday:'long', day:'numeric', month:'long' });
   $('#week-label').textContent = `Week ${String(isoWeek(state.week[0])).padStart(2,'0')} · ${isoWeekYear(state.week[0])}`;
   renderSummary(bookings);
-  renderSchedule();
+  scheduleView.render();
   map.render(state.groups, bookings, state.selectedDate, state.drivers, duplicates);
+  roomView.render(state.bookings, state.selectedDate, state.drivers);
 }
 
 function renderSummary(bookings) {
@@ -82,34 +100,6 @@ function renderSummary(bookings) {
   }).join('');
 }
 
-function duplicateMessage(date, spaceId, driverId) {
-  const ids = duplicatesFor(date).get(driverId) || [];
-  const other = ids.find(id => id !== spaceId);
-  return other ? `⚠ Already has ${spaceById(other)?.name || other}` : '';
-}
-
-function renderSchedule() {
-  const head = state.week.map(date => `<button class="day-head ${date === state.selectedDate ? 'selected' : ''}" data-date="${date}"><span>${esc(formatDate(date, { weekday:'short' }))}</span><b>${esc(formatDate(date, { day:'numeric', month:'short' }))}</b></button>`).join('');
-  const rows = state.spaces.map(space => {
-    const cells = state.week.map(date => {
-      const booking = state.bookings[bookingKey(date, space.id)];
-      const driver = driverById(booking?.driverId);
-      const duplicate = Boolean(booking?.driverId && duplicatesFor(date).has(booking.driverId));
-      const mgOver = space.groupId === 'mg-basement' && groupUsage(dayBookings(date), state.groups.find(group => group.id === 'mg-basement')) > 2;
-      const warning = duplicate ? duplicateMessage(date, space.id, booking.driverId) : (mgOver && booking ? '⚠ MG allocation over 2' : '');
-      return `<button class="schedule-cell ${booking ? 'occupied' : ''} ${duplicate ? 'duplicate' : ''} ${mgOver && booking ? 'mg-warning' : ''}" data-space-id="${esc(space.id)}" data-date="${date}">
-        <span>${esc(driver?.name || 'Empty')}</span>
-        <small>${esc(warning || (booking ? 'Tap to change' : 'Tap to assign'))}</small>
-      </button>`;
-    }).join('');
-    return `<div class="schedule-row"><div class="space-name"><small>${esc(space.groupName)}</small><strong>${esc(space.name)}</strong></div>${cells}</div>`;
-  }).join('');
-
-  $('#schedule').innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking space</div>${head}</div>${rows}</div>`;
-  $('#schedule').querySelectorAll('[data-date]').forEach(element => element.addEventListener('click', () => selectDate(element.dataset.date)));
-  $('#schedule').querySelectorAll('[data-space-id]').forEach(element => element.addEventListener('click', () => openPicker(element.dataset.spaceId, element.dataset.date)));
-}
-
 function selectDate(date) {
   state.selectedDate = date;
   const monday = weekDates(date)[0];
@@ -119,9 +109,7 @@ function selectDate(date) {
   if (weekChanged) reloadBookings(true);
 }
 
-function changeMapDate(date, amount) {
-  selectDate(addDays(date, amount));
-}
+function changeMapDate(date, amount) { selectDate(addDays(date, amount)); }
 
 function openPicker(spaceId, date) {
   const space = spaceById(spaceId);
@@ -139,16 +127,15 @@ function renderDrivers() {
   const query = $('#driver-search').value.trim().toLocaleLowerCase();
   const filtered = state.drivers.filter(driver => driver.name.toLocaleLowerCase().includes(query));
   $('#driver-list').innerHTML = filtered.length ? filtered.map(driver => `<button type="button" class="driver-option" data-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>Assign immediately</small></span></button>`).join('') : '<p class="empty-state">No employees found</p>';
-  $('#driver-list').querySelectorAll('[data-driver-id]').forEach(element => element.addEventListener('click', () => saveBooking(element.dataset.driverId)));
+  $('#driver-list').querySelectorAll('[data-driver-id]').forEach(element => element.addEventListener('click', () => saveParkingBooking(element.dataset.driverId)));
 }
 
-async function saveBooking(driverId) {
-  await updateBooking({ driverId, updatedAt: new Date().toISOString() });
+async function saveParkingBooking(driverId) {
+  await updateParkingBooking({ driverId, updatedAt: new Date().toISOString() });
 }
+async function clearParkingBooking() { await updateParkingBooking(null); }
 
-async function clearBooking() { await updateBooking(null); }
-
-async function updateBooking(value) {
+async function updateParkingBooking(value) {
   if (!state.selectedSpace) return;
   const { spaceId, date } = state.selectedSpace;
   const key = bookingKey(date, spaceId);
@@ -159,12 +146,12 @@ async function updateBooking(value) {
   render();
   try {
     await backend.setBooking(key, value);
-    setConnection('Live', 'live');
+    setConnection('Live', 'live', 'Shared bookings are synchronized.');
     toast(value ? `${driverById(value.driverId)?.name || 'Employee'} assigned` : 'Parking space cleared');
   } catch (error) {
     if (before) state.bookings[key] = before; else delete state.bookings[key];
     render();
-    setConnection('Reconnecting', 'offline');
+    setConnection('Sync issue', 'offline', error.message);
     toast(error.message || 'Could not save parking assignment');
   } finally {
     mutationsInFlight--;
@@ -184,14 +171,20 @@ async function reloadBookings(force = false) {
       lastFingerprint = nextFingerprint;
       render();
     }
-    setConnection('Live', 'live');
+    setConnection('Live', 'live', 'Shared bookings are synchronized.');
   } catch (error) {
     console.error(error);
-    setConnection('Reconnecting', 'offline');
+    setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
   } finally {
     refreshInFlight = false;
   }
 }
+
+const roomController = new RoomDialogController({
+  state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings,
+  beginMutation: () => { mutationsInFlight++; },
+  endMutation: () => { mutationsInFlight--; }
+});
 
 function shiftWeek(amount) {
   state.week = weekDates(addDays(state.week[0], amount * 7));
@@ -209,6 +202,7 @@ function applyTheme(theme) {
 
 async function init() {
   try {
+    setConnection('Connecting…', 'checking', 'Checking shared storage.');
     const [configResponse, driversResponse] = await Promise.all([
       fetch('./parking-config.json', { cache:'no-store' }),
       fetch('./drivers.txt', { cache:'no-store' })
@@ -216,9 +210,11 @@ async function init() {
     if (!configResponse.ok || !driversResponse.ok) throw new Error('Could not load parking configuration.');
     const config = await configResponse.json();
     state.groups = config.groups;
+    state.meetingRoom = config.meetingRoom;
     state.drivers = parseDrivers(await driversResponse.text());
     state.spaces = flattenSpaces(state.groups);
     const now = osloNow();
+    state.today = now.date;
     const monday = initialWeekDate(now.date, now.weekday);
     state.week = weekDates(monday);
     state.selectedDate = (now.weekday === 0 || now.weekday === 6) ? monday : now.date;
@@ -226,7 +222,7 @@ async function init() {
     await reloadBookings(true);
   } catch (error) {
     console.error(error);
-    setConnection('Offline', 'offline');
+    setConnection('Offline', 'offline', error.message);
     toast(error.message || 'Could not start the app');
   }
 }
@@ -234,11 +230,17 @@ async function init() {
 $('#previous-week').addEventListener('click', () => shiftWeek(-1));
 $('#next-week').addEventListener('click', () => shiftWeek(1));
 $('#driver-search').addEventListener('input', renderDrivers);
-$('#clear-booking').addEventListener('click', clearBooking);
+$('#clear-booking').addEventListener('click', clearParkingBooking);
 $('#theme-toggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
 
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reloadBookings(true); });
-window.addEventListener('online', () => reloadBookings(true));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (lastConnectionError) setConnection('Reconnecting…', 'checking', lastConnectionError);
+    reloadBookings(true);
+  }
+});
+window.addEventListener('online', () => { setConnection('Reconnecting…', 'checking', 'Internet connection restored; checking shared storage.'); reloadBookings(true); });
+window.addEventListener('offline', () => setConnection('Offline', 'offline', 'This device is offline.'));
 
 window.addEventListener('beforeinstallprompt', event => {
   event.preventDefault();
@@ -255,5 +257,5 @@ $('#install-app').addEventListener('click', async () => {
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
 applyTheme(localStorage.getItem('gt-parking-theme') || 'dark');
-setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(750, Number(APP_CONFIG.pollMs || 1000)));
+setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(1000, Number(APP_CONFIG.pollMs || 1500)));
 init();

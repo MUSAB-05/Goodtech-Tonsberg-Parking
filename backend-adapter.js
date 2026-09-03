@@ -1,8 +1,9 @@
 export class ParkingBackend {
-  constructor({ baseUrl, namespace, fetchImpl = fetch }) {
+  constructor({ baseUrl, namespace, fetchImpl = fetch, timeoutMs = 8000 }) {
     this.baseUrl = String(baseUrl || 'https://mantledb.sh/v2').replace(/\/$/, '');
     this.namespace = String(namespace || '').trim();
     this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
     if (!this.namespace) throw new Error('Shared parking namespace is not configured.');
   }
 
@@ -11,26 +12,40 @@ export class ParkingBackend {
     return `bookings/${month}`;
   }
 
-  url(path) {
-    return `${this.baseUrl}/${encodeURIComponent(this.namespace)}/${path}`;
-  }
+  url(path) { return `${this.baseUrl}/${encodeURIComponent(this.namespace)}/${path}`; }
 
   async request(path, { method = 'GET', body } = {}) {
-    const response = await this.fetchImpl(this.url(path), {
-      method,
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: 'no-store'
-    });
-    const text = await response.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-    if (!response.ok) {
-      const error = new Error(data?.error || `Shared storage error (${response.status})`);
-      error.status = response.status;
-      throw error;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
+    try {
+      const response = await this.fetchImpl(this.url(path), {
+        method,
+        mode: 'cors',
+        credentials: 'omit',
+        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        cache: 'no-store',
+        signal: controller?.signal
+      });
+      const text = await response.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!response.ok) {
+        const error = new Error(data?.error || `Shared storage error (${response.status})`);
+        error.status = response.status;
+        error.kind = 'http';
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      if (error?.kind === 'http') throw error;
+      const wrapped = new Error(error?.name === 'AbortError' ? 'Shared storage timed out.' : 'Shared storage is unreachable.');
+      wrapped.kind = 'network';
+      wrapped.cause = error;
+      throw wrapped;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return data;
   }
 
   async ensureMonth(month) {
@@ -52,9 +67,14 @@ export class ParkingBackend {
   async setBooking(key, booking) {
     const month = String(key).slice(0, 7);
     await this.ensureMonth(month);
-    await this.request(this.path(month), {
-      method: 'PATCH',
-      body: { [key]: booking || null }
-    });
+    await this.request(this.path(month), { method: 'PATCH', body: { [key]: booking || null } });
+  }
+
+  async healthCheck() {
+    const path = `health/${Date.now()}`;
+    await this.request(path, { method: 'POST', body: { ok: true } });
+    const read = await this.request(path);
+    await this.request(path, { method: 'DELETE' });
+    return read?.ok === true;
   }
 }

@@ -12,6 +12,6 @@ jobs:
       - name: Refresh MantleDB namespace activity
         run: |
           curl --fail --silent --show-error \
-            -X POST 'https://mantledb.sh/v2/goodtech-tonsberg-parking-89beb96e/meta' \
+            -X POST 'https://mantledb.sh/v2/gt-parking-musab-20260903-v3/meta' \
             -H 'Content-Type: application/json' \
             --data '{"application":"GT Parking","keepalive":true}'

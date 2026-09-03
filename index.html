@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10191b">
-  <meta name="description" content="Shared Goodtech Tønsberg parking allocation">
+  <meta name="theme-color" content="#10163b">
+  <meta name="description" content="Shared Goodtech Tønsberg parking and meeting room allocation">
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="GT Parking">
@@ -16,23 +16,46 @@
 </head>
 <body>
   <header class="topbar">
-    <div><p class="eyebrow">GOODTECH TØNSBERG</p><h1>GT Parking</h1><p class="subtitle">Shared office parking board</p></div>
+    <div class="brand">
+      <img class="goodtech-logo" src="./assets/goodtech-logo.webp" alt="Goodtech">
+      <div class="brand-copy"><h1>Tønsberg Parking</h1><p class="subtitle">Parking & meeting room board</p></div>
+    </div>
     <div class="top-actions">
-      <span id="connection" class="connection">Starting…</span>
+      <span id="connection" class="connection checking" title="Checking shared storage">Connecting…</span>
       <button id="install-app" class="compact-button" type="button" hidden>＋ App</button>
       <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle light mode">☼</button>
     </div>
   </header>
+
   <main>
-    <section class="hero-row"><div><p class="eyebrow">LIVE PARKING MAP</p><h2 id="selected-date-title">Selected date</h2></div><div id="daily-summary" class="summary"></div></section>
-    <div id="parking-map" class="map-shell"></div>
+    <section class="hero-row">
+      <div><p class="eyebrow">LIVE OFFICE OVERVIEW</p><h2 id="selected-date-title">Selected date</h2></div>
+      <div id="daily-summary" class="summary"></div>
+    </section>
+
+    <section class="overview-grid">
+      <div id="parking-map" class="map-shell"></div>
+      <aside id="meeting-room" class="room-shell" aria-label="Meeting room schedule"></aside>
+    </section>
+
     <section class="schedule-panel">
       <div class="schedule-toolbar"><button id="previous-week" class="compact-button" type="button">← Previous</button><strong id="week-label"></strong><button id="next-week" class="compact-button" type="button">Next →</button></div>
       <p class="mobile-hint">Swipe dates sideways. The parking-space column stays fixed.</p>
       <div id="schedule" class="schedule-scroll"></div>
     </section>
   </main>
-  <dialog id="picker" class="picker"><form method="dialog"><div class="picker-head"><div><p class="eyebrow">ASSIGN PARKING</p><h2 id="picker-title">Choose employee</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><input id="driver-search" type="search" placeholder="Search employees" autocomplete="off"><div id="driver-list" class="driver-list"></div><button id="clear-booking" class="clear-button" type="button">Clear / Empty</button></form></dialog>
+
+  <dialog id="picker" class="picker">
+    <form method="dialog">
+      <div class="picker-head"><div><p class="eyebrow">ASSIGN PARKING</p><h2 id="picker-title">Choose employee</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+      <input id="driver-search" type="search" placeholder="Search employees" autocomplete="off">
+      <div id="driver-list" class="driver-list"></div>
+      <button id="clear-booking" class="clear-button" type="button">Clear assignment</button>
+    </form>
+  </dialog>
+
+  <dialog id="room-dialog" class="picker room-dialog"><div id="room-dialog-content"></div></dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

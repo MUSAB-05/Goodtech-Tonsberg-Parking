@@ -2,27 +2,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 const read=path=>fs.readFile(new URL(`../${path}`,import.meta.url),'utf8');
+const readCss=async()=>['styles/base.css','styles/overview.css','styles/schedule.css','styles/dialogs.css','styles/responsive.css'].reduce(async(acc,p)=>(await acc)+(await read(p)),Promise.resolve(''));
 
-test('PWA files and install metadata are present', async()=>{
+test('PWA files, Goodtech logo and install metadata are present', async()=>{
   const [html,manifest,sw]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js')]);
-  assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/);
+  assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v2-/);
+  assert.match(sw,/gt-parking-shell-v3-/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
 });
 
 test('mobile safe gutters, sticky column and no page overflow rules exist', async()=>{
-  const css=await read('styles.css');
+  const css=await readCss();
   assert.match(css,/@media\(max-width:390px\)/); assert.match(css,/calc\(100% - 30px\)/); assert.match(css,/position:sticky;left:0/); assert.match(css,/html\{overflow-x:hidden/);
 });
 
-test('map matches requested physical grouping', async()=>{
+test('map uses compact MG layout, charger and swapped F18 ordering', async()=>{
   const map=await read('parking-map.js');
-  assert.match(map,/mg-50','mg-51','mg-52','mg-53','mg-54'/); assert.match(map,/mg-69/); assert.match(map,/f18-nedreplan/); assert.match(map,/f18-ovreplan/);
+  const upper=map.indexOf("'f18-ovreplan'"); const lower=map.indexOf("'f18-nedreplan'");
+  assert.match(map,/mg-50','mg-51','mg-52','mg-53','mg-54'/); assert.match(map,/mg-69/); assert.match(map,/charger/); assert.ok(upper < lower);
 });
 
-test('app includes live polling, weekend focus, duplicate text and no login', async()=>{
-  const [app,html]=await Promise.all([read('app.js'),read('index.html')]);
-  assert.match(app,/APP_CONFIG\.pollMs/); assert.match(app,/initialWeekDate/); assert.match(app,/Already has/); assert.doesNotMatch(html,/password/i); assert.doesNotMatch(html,/login/i);
+test('status colors and no Empty parking labels are implemented', async()=>{
+  const [css,map,app]=await Promise.all([readCss(),read('parking-map.js'),read('app.js')]);
+  assert.match(css,/map-space\.available/); assert.match(css,/map-space\.occupied/); assert.match(css,/mg-over-free/);
+  assert.doesNotMatch(map,/driver\?\.name \|\| 'Empty'/); assert.doesNotMatch(app,/>Empty</);
+});
+
+test('meeting room has daily 06-18 view and weekly availability row', async()=>{
+  const [room,controller,schedule,html]=await Promise.all([read('meeting-room.js'),read('room-dialog-controller.js'),read('schedule-view.js'),read('index.html')]);
+  assert.match(schedule,/room-week-bar/); assert.match(controller,/roomBookingKey/); assert.match(controller,/openDetails/);
+  assert.match(room,/roomAvailability/); assert.match(html,/meeting-room/); assert.match(html,/room-dialog/);
+});
+
+test('app includes live polling, weekend focus, strong today state and no login', async()=>{
+  const [app,schedule,html]=await Promise.all([read('app.js'),read('schedule-view.js'),read('index.html')]);
+  assert.match(app,/APP_CONFIG\.pollMs/); assert.match(app,/initialWeekDate/); assert.match(schedule,/Already has/); assert.match(schedule,/TODAY/); assert.match(app,/Sync issue/); assert.doesNotMatch(html,/password/i); assert.doesNotMatch(html,/login/i);
 });
 
 test('robots discourages indexing', async()=>{ assert.match(await read('robots.txt'),/Disallow: \//); });

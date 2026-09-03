@@ -1,39 +1,50 @@
 # Goodtech Tønsberg Parking
 
-Lightweight shared parking-allocation PWA for the Goodtech Tønsberg office.
+A lightweight shared parking and meeting-room PWA for the Goodtech Tønsberg office.
 
-## Live app
+## Current features
 
-GitHub Pages production URL after the Pages workflow provisions the site:
+- Monday–Sunday schedule with strong **Today** highlighting.
+- Goodtech-inspired navy/indigo visual theme using the supplied Goodtech logo.
+- Parking status is colour-first: green = available, red = occupied.
+- MG normal allocation is 2 spaces; after more than 2 are used, remaining free MG spaces turn yellow while bookings remain allowed.
+- MG 69 is marked as an EV-charger space.
+- Compact live schematic with MG 50–54 stacked, MG 69 separated, then F18 Øvreplan above F18 Nedreplan.
+- Meeting-room booking from 06:00–18:00, minimum 1 hour and up to the full day.
+- Weekly meeting-room availability bar with details on click.
+- Searchable employee picker using `drivers.txt` and stable name-derived IDs.
+- Duplicate same-day parking warnings without blocking deliberate duplicates.
+- Shared monthly booking shards through MantleDB with optimistic updates and live polling.
+- PWA install support, offline application shell, dark mode default and optional light mode.
 
-`https://musab-05.github.io/Goodtech-Tonsberg-Parking/`
+## Shared state
 
-The public website intentionally has no user accounts or passwords. Anyone with the URL can view and change parking assignments.
+`config.js` uses the anonymous MantleDB namespace `gt-parking-musab-20260903-v3`. Parking and meeting-room records share monthly entries under `bookings/YYYY-MM`. The GitHub Actions deployment test performs a real backend + CORS smoke check, and a scheduled workflow writes a keepalive every 14 days.
 
-## Configuration
+The public app intentionally has no login. Anyone with the URL can view and edit the board.
 
-- `drivers.txt` — one employee per line; `#` starts a comment.
-- `parking-config.json` — parking groups, spaces and normal allocation limits.
-- `config.js` — app settings plus the MantleDB namespace used for shared state.
+## Maintenance
 
-Stable employee IDs are generated from normalized names, so reordering `drivers.txt` does not break bookings.
+- Employees: edit `drivers.txt`.
+- Parking spaces / MG limit / charger metadata: edit `parking-config.json`.
+- Meeting-room hours: edit the `meetingRoom` block in `parking-config.json` and matching constants in `booking-utils.js` if the operating window changes.
 
-## Shared data
+## Development
 
-Bookings are stored in an unclaimed MantleDB namespace, matching this app's intentionally open shared-board model. Data is sharded monthly at paths such as `bookings/2026-09`, with fields keyed like `2026-09-03__mg-50`.
+Serve the repository root over HTTP, for example:
 
-The app polls the month(s) needed for the visible week roughly once per second while the page is visible. A scheduled GitHub Action writes a small keepalive entry every 14 days so the free anonymous namespace does not expire from inactivity.
+```bash
+python -m http.server 4173
+```
 
-## Local development
+Run unit tests:
 
-Serve the repository over HTTP with `python -m http.server 4173`, then open `http://localhost:4173/`.
+```bash
+npm test
+```
 
-Run validation with `npm test` plus `node --check` on the JavaScript modules.
+Run the real shared-backend connectivity test (requires internet):
 
-## Deployment
-
-`.github/workflows/pages.yml` runs tests and deploys the repository root to GitHub Pages from `main`.
-
-## Parking rules
-
-MG Basement has six physical spaces (50, 51, 52, 53, 54, 69) but a normal allocation of two. More than two MG bookings are allowed and shown with warnings rather than blocked. Duplicate same-day employee bookings are also allowed but highlighted with the other parking space named in the warning.
+```bash
+npm run test:backend
+```

@@ -1,3 +1,6 @@
+export const ROOM_START_HOUR = 6;
+export const ROOM_END_HOUR = 18;
+
 export function stableId(name) {
   return String(name)
     .replace(/[øØ]/g, 'o').replace(/[æÆ]/g, 'ae').replace(/[åÅ]/g, 'a')
@@ -27,7 +30,9 @@ export function initialWeekDate(todayIso, weekday) {
 
 export function monthKey(date) { return String(date).slice(0, 7); }
 export function bookingKey(date, spaceId) { return `${date}__${spaceId}`; }
+export function roomBookingKey(date, startHour) { return `${date}__meeting-room__${String(startHour).padStart(2, '0')}`; }
 export function formatDate(date, options) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...options }).format(dateFromIso(date)); }
+export function hourLabel(hour) { return `${String(hour).padStart(2, '0')}:00`; }
 
 export function isoWeek(date) {
   const value = dateFromIso(date);
@@ -49,6 +54,29 @@ export function flattenSpaces(groups) {
 
 export function bookingsForDate(bookings, date, spaces) {
   return Object.fromEntries(spaces.map(space => [space.id, bookings?.[bookingKey(date, space.id)] || null]));
+}
+
+export function roomBookingsForDate(bookings, date) {
+  return Object.entries(bookings || {})
+    .filter(([key, value]) => key.startsWith(`${date}__meeting-room__`) && value?.kind === 'meeting-room')
+    .map(([key, value]) => ({ key, ...value }))
+    .sort((a, b) => a.startHour - b.startHour);
+}
+
+export function roomBookingAtHour(bookings, date, hour) {
+  return roomBookingsForDate(bookings, date).find(item => item.startHour <= hour && item.endHour > hour) || null;
+}
+
+export function roomAvailability(bookings, date) {
+  return Array.from({ length: ROOM_END_HOUR - ROOM_START_HOUR }, (_, index) => {
+    const hour = ROOM_START_HOUR + index;
+    return { hour, booking: roomBookingAtHour(bookings, date, hour) };
+  });
+}
+
+export function roomRangeIsFree(bookings, date, startHour, endHour, ignoreKey = null) {
+  if (startHour < ROOM_START_HOUR || endHour > ROOM_END_HOUR || endHour <= startHour) return false;
+  return !roomBookingsForDate(bookings, date).some(item => item.key !== ignoreKey && startHour < item.endHour && endHour > item.startHour);
 }
 
 export function duplicateAssignments(dayBookings) {

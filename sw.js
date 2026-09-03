@@ -1,7 +1,7 @@
-const CACHE = 'gt-parking-shell-v2-20260903';
+const CACHE = 'gt-parking-shell-v3-20260903';
 const SHELL = [
-  './','./index.html','./styles.css','./app.js','./config.js','./backend-adapter.js','./booking-utils.js','./parking-map.js',
-  './parking-config.json','./drivers.txt','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./robots.txt'
+  './','./index.html','./styles.css','./styles/base.css','./styles/overview.css','./styles/schedule.css','./styles/dialogs.css','./styles/responsive.css','./app.js','./schedule-view.js','./room-dialog-controller.js','./config.js','./backend-adapter.js','./booking-utils.js','./parking-map.js','./meeting-room.js',
+  './parking-config.json','./drivers.txt','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./assets/goodtech-logo.webp','./robots.txt'
 ];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));

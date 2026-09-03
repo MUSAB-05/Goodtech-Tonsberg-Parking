@@ -19,14 +19,20 @@ test('backend merges cross-month shards', async()=>{
   assert.equal(Object.keys(result).length,2);
 });
 
-test('backend patches only matching month and null clears field', async()=>{
+test('backend patches parking and room records in matching month', async()=>{
   const calls=[];
   const fetchImpl=async(url,options={})=>{calls.push({url,method:options.method||'GET',body:options.body});return response(200,{})};
   const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',fetchImpl});
   await backend.setBooking('2026-09-03__mg-50',{driverId:'mustafa'});
+  await backend.setBooking('2026-09-03__meeting-room__08',{kind:'meeting-room',driverId:'mustafa',startHour:8,endHour:10});
   await backend.setBooking('2026-09-03__mg-50',null);
   const patch=calls.filter(c=>c.method==='PATCH');
-  assert.equal(patch.length,2);
+  assert.equal(patch.length,3);
   assert.match(patch[0].url,/bookings\/2026-09$/);
-  assert.deepEqual(JSON.parse(patch[1].body),{'2026-09-03__mg-50':null});
+  assert.deepEqual(JSON.parse(patch[2].body),{'2026-09-03__mg-50':null});
+});
+
+test('backend reports network failures as a shared-storage issue', async()=>{
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',fetchImpl:async()=>{throw new TypeError('network')}});
+  await assert.rejects(()=>backend.getBookings(['2026-09']),/Shared storage is unreachable/);
 });

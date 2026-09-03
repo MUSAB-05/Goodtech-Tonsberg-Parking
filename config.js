@@ -1,7 +1,7 @@
 export const APP_CONFIG = {
   appName: 'Goodtech Tønsberg Parking',
   timezone: 'Europe/Oslo',
-  pollMs: 1000,
+  pollMs: 1500,
   mantleBaseUrl: 'https://mantledb.sh/v2',
-  mantleNamespace: 'goodtech-tonsberg-parking-89beb96e'
+  mantleNamespace: 'gt-parking-musab-20260903-v3'
 };

@@ -19,6 +19,8 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      - name: Verify shared backend and browser CORS
+        run: npm run test:backend
   deploy:
     needs: test
     environment:

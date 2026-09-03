@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {
   addDays, bookingKey, bookingsForDate, duplicateAssignments, flattenSpaces, groupUsage,
-  initialWeekDate, isoWeek, isoWeekYear, parseDrivers, stableId, weekDates
+  initialWeekDate, isoWeek, isoWeekYear, parseDrivers, roomAvailability, roomBookingAtHour,
+  roomBookingKey, roomBookingsForDate, roomRangeIsFree, stableId, weekDates
 } from '../booking-utils.js';
 
 const config = JSON.parse(await fs.readFile(new URL('../parking-config.json', import.meta.url), 'utf8'));
@@ -25,8 +26,9 @@ test('driver parser ignores comments and empty lines', () => {
   assert.deepEqual(parseDrivers('# comment\n\nMustafa\nKevin\n').map(x=>x.name), ['Mustafa','Kevin']);
 });
 
-test('requested parking spaces exist', () => {
+test('requested parking spaces and charger exist', () => {
   assert.deepEqual(spaces.map(s=>s.name), ['F18 Øvreplan 1','F18 Øvreplan 2','F18 Nedreplan','MG 50','MG 51','MG 52','MG 53','MG 54','MG 69']);
+  assert.equal(spaces.find(s=>s.id==='mg-69').charger,true);
 });
 
 for (const count of [0,1,2,3,6]) {
@@ -73,4 +75,23 @@ test('parking config can add a new space without code changes', () => {
   const copy=structuredClone(config);
   copy.groups.find(g=>g.id==='mg-basement').spaces.push({id:'mg-70',name:'MG 70'});
   assert.equal(flattenSpaces(copy.groups).some(s=>s.id==='mg-70'),true);
+});
+
+test('meeting room reservations use 1-hour minimum and detect overlaps', () => {
+  const date='2026-09-03';
+  const key=roomBookingKey(date,8);
+  const bookings={ [key]:{kind:'meeting-room',driverId:'mustafa',startHour:8,endHour:11} };
+  assert.equal(roomBookingsForDate(bookings,date).length,1);
+  assert.equal(roomBookingAtHour(bookings,date,9).driverId,'mustafa');
+  assert.equal(roomRangeIsFree(bookings,date,6,8),true);
+  assert.equal(roomRangeIsFree(bookings,date,7,9),false);
+  assert.equal(roomRangeIsFree(bookings,date,11,18),true);
+  assert.equal(roomRangeIsFree(bookings,date,8,8),false);
+});
+
+test('meeting room availability covers 06:00 through 18:00 as 12 hourly slots', () => {
+  const slots=roomAvailability({},'2026-09-03');
+  assert.equal(slots.length,12);
+  assert.equal(slots[0].hour,6);
+  assert.equal(slots.at(-1).hour,17);
 });

@@ -28,8 +28,15 @@
         { "id": "mg-52", "name": "MG 52", "shortName": "MG 52" },
         { "id": "mg-53", "name": "MG 53", "shortName": "MG 53" },
         { "id": "mg-54", "name": "MG 54", "shortName": "MG 54" },
-        { "id": "mg-69", "name": "MG 69", "shortName": "MG 69" }
+        { "id": "mg-69", "name": "MG 69", "shortName": "MG 69", "charger": true }
       ]
     }
-  ]
+  ],
+  "meetingRoom": {
+    "id": "meeting-room",
+    "name": "Meeting room",
+    "startHour": 6,
+    "endHour": 18,
+    "minimumHours": 1
+  }
 }

@@ -1,14 +1,14 @@
 {
   "name": "Goodtech Tønsberg Parking",
   "short_name": "GT Parking",
-  "description": "Shared parking allocation for the Goodtech Tønsberg office.",
+  "description": "Shared parking and meeting room allocation for the Goodtech Tønsberg office.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#10191b",
-  "theme_color": "#10191b",
+  "background_color": "#090d24",
+  "theme_color": "#141a55",
   "icons": [
-    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {"src":"./icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]
 }
