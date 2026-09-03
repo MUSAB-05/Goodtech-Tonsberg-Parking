@@ -19,23 +19,20 @@ export class ParkingBackend {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
     try {
-      const headers = {};
+      // Keep this intentionally aligned with the working WB26 Mantle adapter.
+      const headers = { 'Content-Type': 'application/json' };
       if (this.key) headers['X-Mantle-Key'] = this.key;
-      if (body !== undefined) headers['Content-Type'] = 'application/json';
       const response = await this.fetchImpl(this.url(path), {
         method,
-        mode: 'cors',
-        credentials: 'omit',
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        cache: 'no-store',
         signal: controller?.signal
       });
       const text = await response.text();
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
       if (!response.ok) {
-        const error = new Error(data?.error || `Shared storage error (${response.status})`);
+        const error = new Error(data?.error || data?.message || `Shared storage error (${response.status})`);
         error.status = response.status;
         error.kind = 'http';
         throw error;
