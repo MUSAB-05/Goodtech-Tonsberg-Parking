@@ -8,13 +8,19 @@ test('PWA files, Goodtech logo and install metadata are present', async()=>{
   const [html,manifest,sw]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js')]);
   assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/); assert.match(html,/sync-diagnostics\.js/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v8-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/sync-diagnostics\.js/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v9-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/sync-diagnostics\.js/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
 });
 
-test('mobile layout uses safe gutters, selected-day view and no page overflow', async()=>{
-  const [css,schedule]=await Promise.all([readCss(),read('schedule-view.js')]);
+test('phone layout uses safe gutters, keeps the top overview and hides the weekly schedule', async()=>{
+  const css=await readCss();
   assert.match(css,/@media\(max-width:390px\)/); assert.match(css,/calc\(100% - 16px\)/); assert.match(css,/html\{overflow-x:hidden/);
-  assert.match(css,/mobile-day-strip\{display:flex/); assert.match(css,/schedule-cell:not\(\.selected\)/); assert.match(schedule,/mobile-day-chip/); assert.match(schedule,/selected \? 'selected'/);
+  assert.match(css,/@media\(max-width:700px\)[\s\S]*?\.schedule-panel\{display:none!important\}/);
+});
+
+test('desktop mobile selector is not rendered and base CSS keeps it hidden', async()=>{
+  const [schedule,css]=await Promise.all([read('schedule-view.js'),read('styles/schedule.css')]);
+  assert.match(schedule,/window\.matchMedia\('\(max-width:700px\)'\)/); assert.match(schedule,/const isMobile = Boolean\(this\.mobileQuery\?\.matches\)/);
+  assert.match(schedule,/const mobileMarkup = isMobile \?/); assert.match(css,/mobile-day-strip\{display:none!important\}/);
 });
 
 test('map uses roomy MG layout, charger, full-size MG69 and swapped F18 ordering', async()=>{
