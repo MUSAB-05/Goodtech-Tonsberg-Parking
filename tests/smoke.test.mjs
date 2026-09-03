@@ -6,9 +6,9 @@ const readCss=async()=>['styles/base.css','styles/overview.css','styles/schedule
 
 test('PWA files, Goodtech logo and install metadata are present', async()=>{
   const [html,manifest,sw]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js')]);
-  assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/);
+  assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/); assert.match(html,/sync-diagnostics\.js/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v6-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v7-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/sync-diagnostics\.js/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
 });
 
 test('mobile safe gutters, sticky column and no page overflow rules exist', async()=>{
@@ -48,6 +48,11 @@ test('app includes claimed shared storage, live polling, weekend focus and no lo
   const [app,schedule,html,config,backend]=await Promise.all([read('app.js'),read('schedule-view.js'),read('index.html'),read('config.js'),read('backend-adapter.js')]);
   assert.match(app,/APP_CONFIG\.pollMs/); assert.match(app,/initialWeekDate/); assert.match(app,/key: APP_CONFIG\.mantleKey/); assert.match(schedule,/Already has/); assert.match(schedule,/TODAY/); assert.match(app,/Sync issue/);
   assert.match(config,/mantleKey:/); assert.match(backend,/X-Mantle-Key/); assert.doesNotMatch(html,/password/i); assert.doesNotMatch(html,/login/i);
+});
+
+test('sync diagnostics tests browser reachability, authenticated API and queued writes', async()=>{
+  const [diag,css]=await Promise.all([read('sync-diagnostics.js'),read('styles/dialogs.css')]);
+  assert.match(diag,/mode: 'no-cors'/); assert.match(diag,/backend\.healthCheck/); assert.match(diag,/backend\.setBookings/); assert.match(diag,/Queue reconciliation/); assert.match(css,/diagnostics-output/);
 });
 
 test('robots discourages indexing', async()=>{ assert.match(await read('robots.txt'),/Disallow: \//); });
