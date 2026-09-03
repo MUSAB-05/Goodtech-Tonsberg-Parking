@@ -1,0 +1,9 @@
+{
+  "name": "goodtech-tonsberg-parking",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}
