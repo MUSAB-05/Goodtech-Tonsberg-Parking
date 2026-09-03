@@ -8,7 +8,7 @@ test('PWA files, Goodtech logo and install metadata are present', async()=>{
   const [html,manifest,sw]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js')]);
   assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v3-/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v4-/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
 });
 
 test('mobile safe gutters, sticky column and no page overflow rules exist', async()=>{
@@ -20,6 +20,16 @@ test('map uses compact MG layout, charger and swapped F18 ordering', async()=>{
   const map=await read('parking-map.js');
   const upper=map.indexOf("'f18-ovreplan'"); const lower=map.indexOf("'f18-nedreplan'");
   assert.match(map,/mg-50','mg-51','mg-52','mg-53','mg-54'/); assert.match(map,/mg-69/); assert.match(map,/charger/); assert.ok(upper < lower);
+});
+
+test('MG remaining spaces switch to warning color as soon as normal allocation is full', async()=>{
+  const [map,schedule]=await Promise.all([read('parking-map.js'),read('schedule-view.js')]);
+  assert.match(map,/mgUsed >= mg\.limit/); assert.match(schedule,/groupUsage\(this\.dayBookings\(date\), mgGroup\) >= mgGroup\.limit/);
+});
+
+test('schedule grid has strong separators and larger readable text', async()=>{
+  const css=await read('styles/schedule.css');
+  assert.match(css,/border-right:2px solid/); assert.match(css,/border-bottom:2px solid/); assert.match(css,/font-size:\.94rem/); assert.match(css,/min-height:68px/);
 });
 
 test('status colors and no Empty parking labels are implemented', async()=>{
