@@ -64,10 +64,16 @@ function dayBookings(date) { return bookingsForDate(state.bookings, date, state.
 function duplicatesFor(date) { return duplicateAssignments(dayBookings(date)); }
 function visibleMonths() { return [...new Set(state.week.map(monthKey))]; }
 
+function validPendingKey(key) { return /^\d{4}-\d{2}-\d{2}__.+/.test(String(key || '')); }
+function pendingValue(entry) {
+  if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value ?? null;
+  return entry ?? null;
+}
 function loadPendingWrites() {
   try {
     const parsed = JSON.parse(localStorage.getItem(PENDING_KEY) || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter(([key]) => validPendingKey(key)));
   } catch { return {}; }
 }
 function savePendingWrites() { localStorage.setItem(PENDING_KEY, JSON.stringify(pendingWrites)); }
@@ -82,7 +88,8 @@ function clearPendingWrite(key) {
 function applyPendingWrites(bookings) {
   const merged = { ...(bookings || {}) };
   for (const [key, entry] of Object.entries(pendingWrites)) {
-    if (entry?.value == null) delete merged[key]; else merged[key] = entry.value;
+    const value = pendingValue(entry);
+    if (value == null) delete merged[key]; else merged[key] = value;
   }
   return merged;
 }
@@ -99,11 +106,22 @@ async function persistShared(key, value) {
 async function flushPendingWrites() {
   if (pendingFlushInFlight || !Object.keys(pendingWrites).length) return true;
   pendingFlushInFlight = true;
+  const failures = [];
   try {
     for (const [key, entry] of Object.entries({ ...pendingWrites })) {
-      await backend.setBooking(key, entry?.value ?? null);
-      clearPendingWrite(key);
+      if (!validPendingKey(key)) {
+        clearPendingWrite(key);
+        continue;
+      }
+      try {
+        await backend.setBooking(key, pendingValue(entry));
+        clearPendingWrite(key);
+      } catch (error) {
+        failures.push(error);
+        console.warn('Pending booking sync failed', key, error);
+      }
     }
+    if (failures.length) throw failures[0];
     return true;
   } finally {
     pendingFlushInFlight = false;
@@ -231,8 +249,9 @@ async function reloadBookings(force = false) {
       lastFingerprint = nextFingerprint;
       render();
     }
-    if (Object.keys(pendingWrites).length) {
-      setConnection('Sync pending', 'pending', `${syncError?.message || 'Shared storage unavailable.'} Local changes are queued and will retry automatically.`);
+    const pendingCount = Object.keys(pendingWrites).length;
+    if (pendingCount) {
+      setConnection(`Sync pending (${pendingCount})`, 'pending', `${syncError?.message || 'Shared storage unavailable.'} ${pendingCount} local change${pendingCount === 1 ? '' : 's'} queued for retry.`);
     } else if (syncError) {
       setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', syncError.message);
     } else {
@@ -242,7 +261,8 @@ async function reloadBookings(force = false) {
     console.error(error);
     state.bookings = applyPendingWrites(state.bookings);
     render();
-    setConnection(Object.keys(pendingWrites).length ? 'Sync pending' : (navigator.onLine === false ? 'Offline' : 'Sync issue'), Object.keys(pendingWrites).length ? 'pending' : 'offline', error.message);
+    const pendingCount = Object.keys(pendingWrites).length;
+    setConnection(pendingCount ? `Sync pending (${pendingCount})` : (navigator.onLine === false ? 'Offline' : 'Sync issue'), pendingCount ? 'pending' : 'offline', error.message);
   } finally {
     refreshInFlight = false;
   }
@@ -323,7 +343,11 @@ $('#install-app').addEventListener('click', async () => {
   $('#install-app').hidden = true;
 });
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.error);
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js', { updateViaCache:'none' })
+    .then(registration => registration.update())
+    .catch(console.error);
+}
 applyTheme(localStorage.getItem('gt-parking-theme') || 'dark');
 setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(1000, Number(APP_CONFIG.pollMs || 1500)));
 init();
