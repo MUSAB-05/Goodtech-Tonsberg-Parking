@@ -1,0 +1,35 @@
+{
+  "groups": [
+    {
+      "id": "f18-ovreplan",
+      "name": "F18 Øvreplan",
+      "limit": 2,
+      "spaces": [
+        { "id": "f18-ovreplan-1", "name": "F18 Øvreplan 1", "shortName": "Øvreplan 1" },
+        { "id": "f18-ovreplan-2", "name": "F18 Øvreplan 2", "shortName": "Øvreplan 2" }
+      ]
+    },
+    {
+      "id": "f18-nedreplan",
+      "name": "F18 Nedreplan",
+      "limit": 1,
+      "spaces": [
+        { "id": "f18-nedreplan", "name": "F18 Nedreplan", "shortName": "Nedreplan" }
+      ]
+    },
+    {
+      "id": "mg-basement",
+      "name": "MG Basement",
+      "shortName": "MG",
+      "limit": 2,
+      "spaces": [
+        { "id": "mg-50", "name": "MG 50", "shortName": "MG 50" },
+        { "id": "mg-51", "name": "MG 51", "shortName": "MG 51" },
+        { "id": "mg-52", "name": "MG 52", "shortName": "MG 52" },
+        { "id": "mg-53", "name": "MG 53", "shortName": "MG 53" },
+        { "id": "mg-54", "name": "MG 54", "shortName": "MG 54" },
+        { "id": "mg-69", "name": "MG 69", "shortName": "MG 69" }
+      ]
+    }
+  ]
+}

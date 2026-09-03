@@ -1,0 +1,7 @@
+# One employee per line. Lines beginning with # are ignored.
+Mustafa
+Kevin
+Jimmy
+Lene
+Thor
+Helene
