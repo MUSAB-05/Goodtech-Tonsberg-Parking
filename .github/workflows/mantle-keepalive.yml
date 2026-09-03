@@ -1,0 +1,17 @@
+name: Keep parking shared state active
+on:
+  schedule:
+    - cron: '17 5 */14 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh MantleDB namespace activity
+        run: |
+          curl --fail --silent --show-error \
+            -X POST 'https://mantledb.sh/v2/goodtech-tonsberg-parking-89beb96e/meta' \
+            -H 'Content-Type: application/json' \
+            --data '{"application":"GT Parking","keepalive":true}'
