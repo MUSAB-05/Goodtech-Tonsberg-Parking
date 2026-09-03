@@ -25,6 +25,9 @@ const preflight = await fetch(corsUrl, {
   }
 });
 assertCors(preflight, 'CORS preflight');
+const allowHeaders = (preflight.headers.get('access-control-allow-headers') || '').toLowerCase();
+assert.ok(allowHeaders.includes('x-mantle-key'), `CORS preflight does not allow X-Mantle-Key: ${allowHeaders || '(missing)'}`);
+assert.ok(allowHeaders.includes('content-type'), `CORS preflight does not allow Content-Type: ${allowHeaders || '(missing)'}`);
 
 const create = await fetch(corsUrl, {
   method: 'POST',
@@ -48,4 +51,17 @@ assert.equal(data.stage, 'patched');
 const remove = await fetch(corsUrl, { method: 'DELETE', headers: authHeaders });
 assertCors(remove, 'Browser-style DELETE');
 
-console.log('Claimed MantleDB namespace + full browser-style CORS smoke test passed.');
+// Exercise the exact path and payload shape used by the parking app, not only a health document.
+const smokeMonth = '2099-12';
+const smokeKey = '2099-12-31__mg-smoke';
+try {
+  await backend.request(backend.path(smokeMonth), { method:'DELETE' });
+} catch (error) {
+  if (error.status !== 404) throw error;
+}
+await backend.setBooking(smokeKey, { driverId:'smoke-test', updatedAt:new Date().toISOString() });
+const bookingDoc = await backend.getBookings([smokeMonth]);
+assert.equal(bookingDoc[smokeKey]?.driverId, 'smoke-test', 'Real parking booking PATCH/GET did not round-trip');
+await backend.request(backend.path(smokeMonth), { method:'DELETE' });
+
+console.log('Claimed MantleDB namespace + browser CORS + real parking booking smoke test passed.');
