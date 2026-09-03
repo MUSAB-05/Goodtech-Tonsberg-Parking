@@ -65,10 +65,27 @@ export class ParkingBackend {
     return Object.assign({}, ...docs);
   }
 
+  async patchMonth(month, changes) {
+    const clean = changes && typeof changes === 'object' ? changes : {};
+    if (!Object.keys(clean).length) return;
+    await this.ensureMonth(month);
+    await this.request(this.path(month), { method: 'PATCH', body: clean });
+  }
+
   async setBooking(key, booking) {
     const month = String(key).slice(0, 7);
-    await this.ensureMonth(month);
-    await this.request(this.path(month), { method: 'PATCH', body: { [key]: booking || null } });
+    await this.patchMonth(month, { [key]: booking || null });
+  }
+
+  async setBookings(changes) {
+    const grouped = new Map();
+    for (const [key, value] of Object.entries(changes || {})) {
+      const month = String(key).slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(month)) continue;
+      if (!grouped.has(month)) grouped.set(month, {});
+      grouped.get(month)[key] = value ?? null;
+    }
+    for (const [month, monthChanges] of grouped) await this.patchMonth(month, monthChanges);
   }
 
   async healthCheck() {
