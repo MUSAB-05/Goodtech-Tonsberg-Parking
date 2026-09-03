@@ -26,7 +26,8 @@ let pendingFlushInFlight = false;
 
 const backend = new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
-  namespace: APP_CONFIG.mantleNamespace
+  namespace: APP_CONFIG.mantleNamespace,
+  key: APP_CONFIG.mantleKey
 });
 
 const map = new ParkingMap($('#parking-map'), {
@@ -188,7 +189,6 @@ async function updateParkingBooking(value) {
   if (!state.selectedSpace) return;
   const { spaceId, date } = state.selectedSpace;
   const key = bookingKey(date, spaceId);
-  const before = state.bookings[key] || null;
   if (value) state.bookings[key] = value; else delete state.bookings[key];
   $('#picker').close();
   mutationsInFlight++;
@@ -208,7 +208,6 @@ async function updateParkingBooking(value) {
     await reloadBookings(true);
   }
 }
-
 
 async function reloadBookings(force = false) {
   if (refreshInFlight || mutationsInFlight || !state.week.length) return;
