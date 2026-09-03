@@ -20,6 +20,9 @@ let mutationsInFlight = 0;
 let lastFingerprint = '';
 let installPrompt = null;
 let lastConnectionError = '';
+const PENDING_KEY = 'gt-parking-pending-v1';
+let pendingWrites = loadPendingWrites();
+let pendingFlushInFlight = false;
 
 const backend = new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
@@ -59,6 +62,52 @@ function driverById(id) { return state.drivers.find(driver => driver.id === id);
 function dayBookings(date) { return bookingsForDate(state.bookings, date, state.spaces); }
 function duplicatesFor(date) { return duplicateAssignments(dayBookings(date)); }
 function visibleMonths() { return [...new Set(state.week.map(monthKey))]; }
+
+function loadPendingWrites() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+function savePendingWrites() { localStorage.setItem(PENDING_KEY, JSON.stringify(pendingWrites)); }
+function queuePendingWrite(key, value) {
+  pendingWrites[key] = { value: value ?? null, queuedAt: new Date().toISOString() };
+  savePendingWrites();
+}
+function clearPendingWrite(key) {
+  delete pendingWrites[key];
+  savePendingWrites();
+}
+function applyPendingWrites(bookings) {
+  const merged = { ...(bookings || {}) };
+  for (const [key, entry] of Object.entries(pendingWrites)) {
+    if (entry?.value == null) delete merged[key]; else merged[key] = entry.value;
+  }
+  return merged;
+}
+async function persistShared(key, value) {
+  queuePendingWrite(key, value);
+  try {
+    await backend.setBooking(key, value);
+    clearPendingWrite(key);
+    return { synced: true };
+  } catch (error) {
+    return { synced: false, error };
+  }
+}
+async function flushPendingWrites() {
+  if (pendingFlushInFlight || !Object.keys(pendingWrites).length) return true;
+  pendingFlushInFlight = true;
+  try {
+    for (const [key, entry] of Object.entries({ ...pendingWrites })) {
+      await backend.setBooking(key, entry?.value ?? null);
+      clearPendingWrite(key);
+    }
+    return true;
+  } finally {
+    pendingFlushInFlight = false;
+  }
+}
 
 function setConnection(label, status = '', detail = '') {
   const element = $('#connection');
@@ -145,14 +194,14 @@ async function updateParkingBooking(value) {
   mutationsInFlight++;
   render();
   try {
-    await backend.setBooking(key, value);
-    setConnection('Live', 'live', 'Shared bookings are synchronized.');
-    toast(value ? `${driverById(value.driverId)?.name || 'Employee'} assigned` : 'Parking space cleared');
-  } catch (error) {
-    if (before) state.bookings[key] = before; else delete state.bookings[key];
-    render();
-    setConnection('Sync issue', 'offline', error.message);
-    toast(error.message || 'Could not save parking assignment');
+    const result = await persistShared(key, value);
+    if (result.synced) {
+      setConnection('Live', 'live', 'Shared bookings are synchronized.');
+      toast(value ? `${driverById(value.driverId)?.name || 'Employee'} assigned` : 'Parking space cleared');
+    } else {
+      setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Booking is saved on this device and will retry automatically.`);
+      toast('Saved on this device · shared sync pending');
+    }
   } finally {
     mutationsInFlight--;
     state.selectedSpace = null;
@@ -160,28 +209,48 @@ async function updateParkingBooking(value) {
   }
 }
 
+
 async function reloadBookings(force = false) {
   if (refreshInFlight || mutationsInFlight || !state.week.length) return;
   refreshInFlight = true;
+  let syncError = null;
   try {
-    const next = await backend.getBookings(visibleMonths());
+    if (Object.keys(pendingWrites).length) {
+      try { await flushPendingWrites(); }
+      catch (error) { syncError = error; }
+    }
+    let remote = {};
+    try { remote = await backend.getBookings(visibleMonths()); }
+    catch (error) {
+      syncError = syncError || error;
+      remote = state.bookings || {};
+    }
+    const next = applyPendingWrites(remote);
     const nextFingerprint = fingerprint(next);
     if (force || nextFingerprint !== lastFingerprint) {
-      state.bookings = next || {};
+      state.bookings = next;
       lastFingerprint = nextFingerprint;
       render();
     }
-    setConnection('Live', 'live', 'Shared bookings are synchronized.');
+    if (Object.keys(pendingWrites).length) {
+      setConnection('Sync pending', 'pending', `${syncError?.message || 'Shared storage unavailable.'} Local changes are queued and will retry automatically.`);
+    } else if (syncError) {
+      setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', syncError.message);
+    } else {
+      setConnection('Live', 'live', 'Shared bookings are synchronized.');
+    }
   } catch (error) {
     console.error(error);
-    setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
+    state.bookings = applyPendingWrites(state.bookings);
+    render();
+    setConnection(Object.keys(pendingWrites).length ? 'Sync pending' : (navigator.onLine === false ? 'Offline' : 'Sync issue'), Object.keys(pendingWrites).length ? 'pending' : 'offline', error.message);
   } finally {
     refreshInFlight = false;
   }
 }
 
 const roomController = new RoomDialogController({
-  state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings,
+  state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings, persistShared,
   beginMutation: () => { mutationsInFlight++; },
   endMutation: () => { mutationsInFlight--; }
 });

@@ -3,3 +3,19 @@
 @import url('./styles/schedule.css');
 @import url('./styles/dialogs.css');
 @import url('./styles/responsive.css');
+
+/* High-contrast Goodtech pass. Keep these overrides last so the interface stays
+   readable on lower-contrast office monitors as well as phones. */
+:root{
+  --bg:#06091a;--bg-top:#1a246b;--panel:#141c43;--panel-2:#1b2553;--panel-3:#26316a;
+  --text:#fff;--muted:#d6dcf5;--faint:#adb7de;--line:#5969ad;--accent:#8e99ff;--accent-strong:#f0f2ff;--accent-soft:#2d397f;
+  --free:#8af2c7;--free-bg:#235c49;--free-border:#72e6b7;--occupied:#fff;--occupied-bg:#8b283b;--occupied-border:#ff8294;
+  --warning:#ffe18a;--warning-bg:#6a5118;--warning-border:#ffd66b;--danger:#ff8294;--today:#b4bcff;--today-bg:#3a49a9
+}
+body{background:radial-gradient(circle at 13% -4%,#2b378d 0,var(--bg) 38rem)}
+.connection{font-size:.8rem;font-weight:900}.connection.pending{color:#ffe28f}.connection.pending::before{background:#ffd259;box-shadow:0 0 0 4px rgba(255,210,89,.12)}
+.map-shell,.room-shell,.schedule-panel{border-color:#5262a6;background:linear-gradient(180deg,rgba(20,28,67,.98),rgba(9,14,40,.98))}.map-group{border-color:#5363a4;background:#151e46}.map-group-title{color:#e0e5fb}.map-group-title em{color:#fff}
+.map-space.available{background:linear-gradient(180deg,#286b55,#205442);border-color:#72e6b7}.map-space.occupied{background:linear-gradient(180deg,#a23148,#762234);border-color:#ff8294}.map-space.mg-over-free{background:linear-gradient(180deg,#80631f,#654b14);border-color:#ffd66b}.map-space-label{color:#f0f3ff;font-size:10px}.map-space b{color:#fff;font-size:12.5px}.mg-outline{border-color:#7683d4}
+.room-head strong{color:#fff;border-color:#6676ba;background:#202b61}.room-slot span{color:#dce2fb;font-weight:900}.room-slot.free i{background:#286b55;border-color:#72e6b7}.room-slot.booked i{background:#962d43;border-color:#ff8294}.room-slot.free b{color:#8af2c7}.room-slot.booked b{color:#ff9aab}
+.schedule-row>*{border-color:#5363a4}.space-name,.schedule-head,.day-head{background:#17204a}.space-name small,.day-head span{color:#d3d9f3}.space-name strong,.day-head b{color:#fff}.day-head.today{background:linear-gradient(180deg,#4a59c2,#334199);box-shadow:inset 0 0 0 2px #d8dcff}.schedule-cell.available{background:linear-gradient(180deg,#255f4d,#1d4e40);box-shadow:inset 0 0 0 1px rgba(114,230,183,.12)}.schedule-cell.occupied{background:linear-gradient(180deg,#9d3047,#762235)}.schedule-cell.mg-over-free{background:linear-gradient(180deg,#796020,#5e4715)}.schedule-cell.today,.room-week-cell.today{box-shadow:inset 2px 0 #bac1ff,inset -2px 0 #bac1ff}.schedule-cell span{color:#fff;font-size:.82rem}.room-week-cell{background:#20295c}.room-week-bar{height:16px}.room-week-bar i{background:#286b55;border-color:#72e6b7}.room-week-bar i.booked{background:#962d43;border-color:#ff8294}
+.summary-item{border-color:#6877ba;background:#18214d;color:#d6dcf5}.summary-item strong{color:#fff}

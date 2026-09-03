@@ -7,8 +7,8 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 export class RoomDialogController {
-  constructor({ state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings, beginMutation, endMutation }) {
-    Object.assign(this, { state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings, beginMutation, endMutation });
+  constructor({ state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings, persistShared, beginMutation, endMutation }) {
+    Object.assign(this, { state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings, persistShared, beginMutation, endMutation });
   }
 
   shell(title, body) {
@@ -75,14 +75,14 @@ export class RoomDialogController {
     this.beginMutation();
     this.render();
     try {
-      await this.backend.setBooking(key, value);
-      this.setConnection('Live', 'live', 'Shared bookings are synchronized.');
-      this.toast(`Meeting room booked ${hourLabel(startHour)}–${hourLabel(endHour)}`);
-    } catch (error) {
-      delete this.state.bookings[key];
-      this.render();
-      this.setConnection('Sync issue', 'offline', error.message);
-      this.toast(error.message || 'Could not book meeting room');
+      const result = await this.persistShared(key, value);
+      if (result.synced) {
+        this.setConnection('Live', 'live', 'Shared bookings are synchronized.');
+        this.toast(`Meeting room booked ${hourLabel(startHour)}–${hourLabel(endHour)}`);
+      } else {
+        this.setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Booking is saved on this device and will retry automatically.`);
+        this.toast('Meeting room saved on this device · sync pending');
+      }
     } finally {
       this.endMutation();
       await this.reloadBookings(true);
@@ -97,14 +97,14 @@ export class RoomDialogController {
     this.beginMutation();
     this.render();
     try {
-      await this.backend.setBooking(key, null);
-      this.setConnection('Live', 'live', 'Shared bookings are synchronized.');
-      this.toast('Meeting-room booking removed');
-    } catch (error) {
-      this.state.bookings[key] = before;
-      this.render();
-      this.setConnection('Sync issue', 'offline', error.message);
-      this.toast(error.message || 'Could not remove meeting-room booking');
+      const result = await this.persistShared(key, null);
+      if (result.synced) {
+        this.setConnection('Live', 'live', 'Shared bookings are synchronized.');
+        this.toast('Meeting-room booking removed');
+      } else {
+        this.setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Change is saved on this device and will retry automatically.`);
+        this.toast('Removal saved on this device · sync pending');
+      }
     } finally {
       this.endMutation();
       await this.reloadBookings(true);
