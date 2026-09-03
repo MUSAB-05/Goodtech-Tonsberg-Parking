@@ -3,7 +3,11 @@ export class ParkingBackend {
     this.baseUrl = String(baseUrl || 'https://mantledb.sh/v2').replace(/\/$/, '');
     this.namespace = String(namespace || '').trim();
     this.key = String(key || '').trim();
-    this.fetchImpl = fetchImpl;
+    // Native window.fetch can throw "Illegal invocation" when stored as an object method
+    // and later called as this.fetchImpl(...). Always invoke the supplied fetch with
+    // globalThis as its receiver, matching WB26's window.fetch.bind(window) behavior.
+    const nativeFetch = fetchImpl;
+    this.fetchImpl = (...args) => Reflect.apply(nativeFetch, globalThis, args);
     this.timeoutMs = timeoutMs;
     if (!this.namespace) throw new Error('Shared parking namespace is not configured.');
   }
