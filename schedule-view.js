@@ -35,8 +35,8 @@ export class ScheduleView {
         const driver = this.driverById(booking?.driverId);
         const duplicate = Boolean(booking?.driverId && this.duplicatesFor(date).has(booking.driverId));
         const mgGroup = this.state.groups.find(group => group.id === 'mg-basement');
-        const mgOver = space.groupId === 'mg-basement' && groupUsage(this.dayBookings(date), mgGroup) > mgGroup.limit;
-        const classes = [booking ? 'occupied' : 'available', duplicate ? 'duplicate' : '', mgOver && !booking ? 'mg-over-free' : '', date === this.state.today ? 'today' : ''].filter(Boolean).join(' ');
+        const mgAtLimit = space.groupId === 'mg-basement' && groupUsage(this.dayBookings(date), mgGroup) >= mgGroup.limit;
+        const classes = [booking ? 'occupied' : 'available', duplicate ? 'duplicate' : '', mgAtLimit && !booking ? 'mg-over-free' : '', date === this.state.today ? 'today' : ''].filter(Boolean).join(' ');
         const warning = duplicate ? this.duplicateMessage(date, space.id, booking.driverId) : '';
         return `<button class="schedule-cell ${classes}" data-space-id="${esc(space.id)}" data-date="${date}" aria-label="${esc(space.name)}, ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${driver ? `booked by ${esc(driver.name)}` : 'available'}">${driver ? `<span>${esc(driver.name)}</span>` : ''}${warning ? `<small>${esc(warning)}</small>` : ''}</button>`;
       }).join('');
