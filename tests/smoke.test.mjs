@@ -8,7 +8,7 @@ test('PWA files, Goodtech logo and install metadata are present', async()=>{
   const [html,manifest,sw]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js')]);
   assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v4-/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v5-/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
 });
 
 test('mobile safe gutters, sticky column and no page overflow rules exist', async()=>{
@@ -44,9 +44,10 @@ test('meeting room has daily 06-18 view and weekly availability row', async()=>{
   assert.match(room,/roomAvailability/); assert.match(html,/meeting-room/); assert.match(html,/room-dialog/);
 });
 
-test('app includes live polling, weekend focus, strong today state and no login', async()=>{
-  const [app,schedule,html]=await Promise.all([read('app.js'),read('schedule-view.js'),read('index.html')]);
-  assert.match(app,/APP_CONFIG\.pollMs/); assert.match(app,/initialWeekDate/); assert.match(schedule,/Already has/); assert.match(schedule,/TODAY/); assert.match(app,/Sync issue/); assert.doesNotMatch(html,/password/i); assert.doesNotMatch(html,/login/i);
+test('app includes claimed shared storage, live polling, weekend focus and no login', async()=>{
+  const [app,schedule,html,config,backend]=await Promise.all([read('app.js'),read('schedule-view.js'),read('index.html'),read('config.js'),read('backend-adapter.js')]);
+  assert.match(app,/APP_CONFIG\.pollMs/); assert.match(app,/initialWeekDate/); assert.match(app,/key: APP_CONFIG\.mantleKey/); assert.match(schedule,/Already has/); assert.match(schedule,/TODAY/); assert.match(app,/Sync issue/);
+  assert.match(config,/mantleKey:/); assert.match(backend,/X-Mantle-Key/); assert.doesNotMatch(html,/password/i); assert.doesNotMatch(html,/login/i);
 });
 
 test('robots discourages indexing', async()=>{ assert.match(await read('robots.txt'),/Disallow: \//); });
