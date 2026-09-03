@@ -13,6 +13,7 @@ export class ParkingMap {
     const label = new Intl.DateTimeFormat('en-GB', { timeZone:'UTC', weekday:'long', day:'numeric', month:'long' }).format(new Date(`${date}T12:00:00Z`));
     const mg = groups.find(group => group.id === 'mg-basement');
     const mgUsed = mg ? groupUsage(bookings, mg) : 0;
+    const mgAtLimit = Boolean(mg && mgUsed >= mg.limit);
     const mgOver = Boolean(mg && mgUsed > mg.limit);
 
     this.container.innerHTML = `
@@ -22,7 +23,7 @@ export class ParkingMap {
         <button class="icon-button" data-map-date="next" aria-label="Next map date">›</button>
       </div>
       <div class="parking-map">
-        ${this.mgMarkup(groups, bookings, drivers, duplicateMap, mgOver)}
+        ${this.mgMarkup(groups, bookings, drivers, duplicateMap, mgAtLimit, mgOver)}
         <div class="f18-stack">
           ${this.simpleGroupMarkup(groups, 'f18-ovreplan', bookings, drivers, duplicateMap)}
           ${this.simpleGroupMarkup(groups, 'f18-nedreplan', bookings, drivers, duplicateMap)}
@@ -34,11 +35,11 @@ export class ParkingMap {
     this.container.querySelector('[data-map-date="next"]')?.addEventListener('click', () => this.onDateChange(date, 1));
   }
 
-  spotMarkup(space, bookings, drivers, duplicateMap, mgOver = false) {
+  spotMarkup(space, bookings, drivers, duplicateMap, mgAtLimit = false) {
     const booking = bookings[space.id];
     const driver = drivers.find(item => item.id === booking?.driverId);
     const duplicate = Boolean(booking?.driverId && duplicateMap.has(booking.driverId));
-    const emptyMgWarning = Boolean(mgOver && !booking);
+    const emptyMgWarning = Boolean(mgAtLimit && !booking);
     const classes = [booking ? 'occupied' : 'available', duplicate ? 'duplicate' : '', emptyMgWarning ? 'mg-over-free' : ''].filter(Boolean).join(' ');
     const charger = space.charger ? '<span class="charger" title="EV charger" aria-label="EV charger">⚡</span>' : '';
     const warning = duplicate ? '<small>⚠ Duplicate booking</small>' : '';
@@ -49,18 +50,18 @@ export class ParkingMap {
     </button>`;
   }
 
-  mgMarkup(groups, bookings, drivers, duplicateMap, warning) {
+  mgMarkup(groups, bookings, drivers, duplicateMap, atLimit, overLimit) {
     const group = groups.find(item => item.id === 'mg-basement');
     if (!group) return '';
     const byId = new Map(group.spaces.map(space => [space.id, space]));
     const rightIds = ['mg-50','mg-51','mg-52','mg-53','mg-54'];
     const used = groupUsage(bookings, group);
-    return `<section class="map-group map-mg-basement ${warning ? 'group-warning' : ''}">
-      <div class="map-group-title"><span>${esc(group.name)}</span><em>${warning ? `⚠ ${used}/${group.limit} extra usage` : `${used}/${group.limit} normal allocation`}</em></div>
+    return `<section class="map-group map-mg-basement ${overLimit ? 'group-warning' : ''}">
+      <div class="map-group-title"><span>${esc(group.name)}</span><em>${overLimit ? `⚠ ${used}/${group.limit} extra usage` : `${used}/${group.limit} normal allocation`}</em></div>
       <div class="mg-layout">
         <div class="mg-outline" aria-hidden="true"></div>
-        <div class="mg-right-stack">${rightIds.map(id => byId.get(id) ? this.spotMarkup(byId.get(id), bookings, drivers, duplicateMap, warning) : '').join('')}</div>
-        <div class="mg-69-pocket">${byId.get('mg-69') ? this.spotMarkup(byId.get('mg-69'), bookings, drivers, duplicateMap, warning) : ''}</div>
+        <div class="mg-right-stack">${rightIds.map(id => byId.get(id) ? this.spotMarkup(byId.get(id), bookings, drivers, duplicateMap, atLimit) : '').join('')}</div>
+        <div class="mg-69-pocket">${byId.get('mg-69') ? this.spotMarkup(byId.get('mg-69'), bookings, drivers, duplicateMap, atLimit) : ''}</div>
       </div>
     </section>`;
   }
