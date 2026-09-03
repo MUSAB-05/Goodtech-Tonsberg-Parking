@@ -1,7 +1,8 @@
 export class ParkingBackend {
-  constructor({ baseUrl, namespace, fetchImpl = fetch, timeoutMs = 8000 }) {
+  constructor({ baseUrl, namespace, key = '', fetchImpl = fetch, timeoutMs = 8000 }) {
     this.baseUrl = String(baseUrl || 'https://mantledb.sh/v2').replace(/\/$/, '');
     this.namespace = String(namespace || '').trim();
+    this.key = String(key || '').trim();
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
     if (!this.namespace) throw new Error('Shared parking namespace is not configured.');
@@ -18,11 +19,14 @@ export class ParkingBackend {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
     try {
+      const headers = {};
+      if (this.key) headers['X-Mantle-Key'] = this.key;
+      if (body !== undefined) headers['Content-Type'] = 'application/json';
       const response = await this.fetchImpl(this.url(path), {
         method,
         mode: 'cors',
         credentials: 'omit',
-        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         cache: 'no-store',
         signal: controller?.signal
