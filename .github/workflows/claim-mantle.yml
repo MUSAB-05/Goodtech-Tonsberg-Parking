@@ -1,0 +1,15 @@
+name: Claim GT Parking Mantle namespace
+on:
+  push:
+    paths:
+      - '.github/workflows/claim-mantle.yml'
+permissions:
+  contents: read
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Claim dedicated MantleDB namespace
+        run: |
+          set -euo pipefail
+          curl -fsS https://mantledb.sh/v2/claim/gt-parking-musab-20260903-v5
