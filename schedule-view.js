@@ -1,14 +1,10 @@
-import { bookingKey, formatDate, groupUsage, roomAvailability } from './booking-utils.js';
+import { bookingKey, formatDate, normalAllocationUsage, roomAvailability } from './booking-utils.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 export class ScheduleView {
   constructor(container, { state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails }) {
     Object.assign(this, { container, state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails });
-    this.mobileQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width:700px)') : null;
-    this.mobileQuery?.addEventListener?.('change', () => {
-      if (this.state.week?.length) this.render();
-    });
   }
 
   driverById(id) { return this.state.drivers.find(driver => driver.id === id); }
@@ -27,26 +23,20 @@ export class ScheduleView {
   }
 
   render() {
-    const isMobile = Boolean(this.mobileQuery?.matches);
-    const mobileDayStrip = isMobile ? this.state.week.map(date => {
-      const today = date === this.state.today;
-      const selected = date === this.state.selectedDate;
-      return `<button class="mobile-day-chip ${selected ? 'selected' : ''} ${today ? 'today' : ''}" data-mobile-date="${date}"><span>${esc(formatDate(date,{weekday:'short'}))}${today ? ' · Today' : ''}</span><b>${esc(formatDate(date,{day:'numeric',month:'short'}))}</b></button>`;
-    }).join('') : '';
-
     const head = this.state.week.map(date => {
       const today = date === this.state.today;
       const selected = date === this.state.selectedDate;
       return `<button class="day-head ${selected ? 'selected' : ''} ${today ? 'today' : ''}" data-date="${date}"><span>${esc(formatDate(date, { weekday:'short' }))}${today ? ' · TODAY' : ''}</span><b>${esc(formatDate(date, { day:'numeric', month:'short' }))}</b></button>`;
     }).join('');
 
-    const rows = this.state.spaces.map(space => {
+    const orderedSpaces = [...this.state.spaces].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+    const rows = orderedSpaces.map(space => {
       const cells = this.state.week.map(date => {
         const booking = this.state.bookings[bookingKey(date, space.id)];
         const driver = this.driverById(booking?.driverId);
         const duplicate = Boolean(booking?.driverId && this.duplicatesFor(date).has(booking.driverId));
         const mgGroup = this.state.groups.find(group => group.id === 'mg-basement');
-        const mgAtLimit = space.groupId === 'mg-basement' && groupUsage(this.dayBookings(date), mgGroup) >= mgGroup.limit;
+        const mgAtLimit = space.groupId === 'mg-basement' && normalAllocationUsage(this.dayBookings(date), mgGroup) >= mgGroup.limit;
         const selected = date === this.state.selectedDate;
         const classes = [booking ? 'occupied' : 'available', duplicate ? 'duplicate' : '', mgAtLimit && !booking ? 'mg-over-free' : '', date === this.state.today ? 'today' : '', selected ? 'selected' : ''].filter(Boolean).join(' ');
         const warning = duplicate ? this.duplicateMessage(date, space.id, booking.driverId) : '';
@@ -57,10 +47,8 @@ export class ScheduleView {
     }).join('');
 
     const roomRow = `<div class="schedule-row meeting-room-row"><div class="space-name"><small>BOOKABLE</small><strong>Meeting room</strong></div>${this.state.week.map(date => `<button class="room-week-cell ${date === this.state.today ? 'today' : ''} ${date === this.state.selectedDate ? 'selected' : ''}" data-room-day="${date}" aria-label="Meeting room ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}">${this.roomWeekBar(date)}</button>`).join('')}</div>`;
-    const mobileMarkup = isMobile ? `<div class="mobile-day-strip" aria-label="Choose day">${mobileDayStrip}</div>` : '';
-    this.container.innerHTML = `${mobileMarkup}<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking / room</div>${head}</div>${rows}${roomRow}</div>`;
+    this.container.innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking / room</div>${head}</div>${rows}${roomRow}</div>`;
     this.container.querySelectorAll('.day-head[data-date]').forEach(el => el.addEventListener('click', () => this.selectDate(el.dataset.date)));
-    this.container.querySelectorAll('[data-mobile-date]').forEach(el => el.addEventListener('click', () => this.selectDate(el.dataset.mobileDate)));
     this.container.querySelectorAll('[data-space-id]').forEach(el => el.addEventListener('click', () => this.openPicker(el.dataset.spaceId, el.dataset.date)));
     this.container.querySelectorAll('[data-room-day]').forEach(el => el.addEventListener('click', () => this.openRoomDetails(null, el.dataset.roomDay)));
   }
