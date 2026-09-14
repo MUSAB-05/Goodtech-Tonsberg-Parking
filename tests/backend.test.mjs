@@ -44,6 +44,43 @@ test('backend patches parking and room records in matching month', async()=>{
   assert.ok(patch.every(c=>c.headers['X-Mantle-Key']==='test-key'));
 });
 
+test('occupied parking cannot be claimed by another driver', async()=>{
+  const fetchImpl=async(url,options={})=>{
+    if((options.method||'GET')==='GET') return response(200,{'2026-09-03__mg-53':{driverId:'mustafa'}});
+    return response(200,{});
+  };
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl});
+  await assert.rejects(()=>backend.claimBooking('2026-09-03__mg-53',{driverId:'asgeir'}), error=>error?.kind==='busy'&&error.message==='Place is busy.');
+});
+
+test('empty parking can be claimed and is verified afterwards', async()=>{
+  let stored={};
+  const fetchImpl=async(url,options={})=>{
+    const method=options.method||'GET';
+    if(method==='GET') return response(200,stored);
+    if(method==='PATCH'){stored={...stored,...JSON.parse(options.body)};return response(200,{});}
+    return response(200,{});
+  };
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl});
+  await backend.claimBooking('2026-09-03__mg-53',{driverId:'asgeir'});
+  assert.equal(stored['2026-09-03__mg-53'].driverId,'asgeir');
+});
+
+test('per-space frequency history is read and updated by date', async()=>{
+  const calls=[];
+  const fetchImpl=async(url,options={})=>{
+    const method=options.method||'GET'; calls.push({url,method,body:options.body});
+    if(method==='GET') return response(200,{'2026-09-01':'mustafa','2026-09-02':'emil'});
+    return response(200,{});
+  };
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl});
+  const history=await backend.getSpaceFrequency('mg-53');
+  assert.equal(history['2026-09-01'],'mustafa');
+  await backend.setSpaceFrequency('mg-53','2026-09-03','mustafa');
+  assert.match(calls.at(-1).url,/frequency\/mg-53$/);
+  assert.deepEqual(JSON.parse(calls.at(-1).body),{'2026-09-03':'mustafa'});
+});
+
 test('backend reports network failures as a shared-storage issue', async()=>{
   const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl:async()=>{throw new TypeError('network')}});
   await assert.rejects(()=>backend.getBookings(['2026-09']),/Shared storage is unreachable/);
