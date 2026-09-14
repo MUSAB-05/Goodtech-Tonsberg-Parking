@@ -9,9 +9,22 @@ jobs:
   keepalive:
     runs-on: ubuntu-latest
     steps:
-      - name: Refresh MantleDB namespace activity
+      - uses: actions/checkout@v4
+      - name: Read live Mantle configuration
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { APP_CONFIG } from './config.js';
+          fs.appendFileSync(process.env.GITHUB_ENV, `MANTLE_BASE=${APP_CONFIG.mantleBaseUrl}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `MANTLE_NAMESPACE=${APP_CONFIG.mantleNamespace}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `MANTLE_KEY=${APP_CONFIG.mantleKey}\n`);
+          NODE
+      - name: Refresh active MantleDB namespace activity
+        shell: bash
         run: |
           curl --fail --silent --show-error \
-            -X POST 'https://mantledb.sh/v2/gt-parking-musab-20260903-v3/meta' \
+            -X POST "$MANTLE_BASE/$MANTLE_NAMESPACE/meta" \
             -H 'Content-Type: application/json' \
-            --data '{"application":"GT Parking","keepalive":true}'
+            -H "X-Mantle-Key: $MANTLE_KEY" \
+            --data "{\"application\":\"GT Parking\",\"keepalive\":true,\"updatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
