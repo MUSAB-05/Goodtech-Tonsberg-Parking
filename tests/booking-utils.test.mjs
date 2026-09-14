@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {
-  addDays, bookingKey, bookingsForDate, duplicateAssignments, flattenSpaces, groupUsage,
-  initialWeekDate, isoWeek, isoWeekYear, parseDrivers, roomAvailability, roomBookingAtHour,
+  GUEST_DRIVER_ID, addDays, bookingKey, bookingsForDate, duplicateAssignments, flattenSpaces, groupUsage,
+  initialWeekDate, isoWeek, isoWeekYear, normalAllocationUsage, parseDrivers, roomAvailability, roomBookingAtHour,
   roomBookingKey, roomBookingsForDate, roomRangeIsFree, stableId, weekDates
 } from '../booking-utils.js';
 
@@ -20,14 +20,16 @@ function mgBookings(count, date='2026-09-03') {
 test('stable IDs ignore ordering/case and normalize Scandinavian letters', () => {
   assert.equal(stableId(' Mustafa '), stableId('MUSTAFA'));
   assert.equal(stableId('Søren Ås'), 'soren-as');
+  assert.equal(stableId('GUEST'), GUEST_DRIVER_ID);
 });
 
 test('driver parser ignores comments and empty lines', () => {
   assert.deepEqual(parseDrivers('# comment\n\nMustafa\nKevin\n').map(x=>x.name), ['Mustafa','Kevin']);
 });
 
-test('requested parking spaces and charger exist', () => {
+test('requested parking spaces, stable display order and charger exist', () => {
   assert.deepEqual(spaces.map(s=>s.name), ['F18 Øvreplan 1','F18 Øvreplan 2','F18 Nedreplan','MG 50','MG 51','MG 52','MG 53','MG 54','MG 69']);
+  assert.deepEqual(spaces.map(s=>s.displayOrder), [0,1,2,3,4,5,6,7,8]);
   assert.equal(spaces.find(s=>s.id==='mg-69').charger,true);
 });
 
@@ -39,7 +41,30 @@ for (const count of [0,1,2,3,6]) {
   });
 }
 
-test('duplicates are detected only within the same day', () => {
+test('GUEST does not consume MG normal allocation', () => {
+  const date='2026-09-03';
+  const raw={
+    [bookingKey(date,'mg-50')]:{driverId:'guest'},
+    [bookingKey(date,'mg-51')]:{driverId:'guest'},
+    [bookingKey(date,'mg-52')]:{driverId:'mustafa'}
+  };
+  const day=bookingsForDate(raw,date,spaces);
+  assert.equal(groupUsage(day,mg),3);
+  assert.equal(normalAllocationUsage(day,mg),1);
+});
+
+test('GUEST can occupy several spaces without duplicate warning', () => {
+  const date='2026-09-03';
+  const raw={
+    [bookingKey(date,'mg-50')]:{driverId:'guest'},
+    [bookingKey(date,'mg-51')]:{driverId:'guest'},
+    [bookingKey(date,'f18-ovreplan-1')]:{driverId:'guest'}
+  };
+  const dup=duplicateAssignments(bookingsForDate(raw,date,spaces));
+  assert.equal(dup.has('guest'),false);
+});
+
+test('duplicates are detected only within the same day for normal employees', () => {
   const date='2026-09-03';
   const bookings={
     [bookingKey(date,'mg-50')]:{driverId:'mustafa'},
@@ -65,9 +90,9 @@ test('week navigation crosses year boundary', () => {
   assert.equal(isoWeekYear('2027-01-04'),2027);
 });
 
-test('weekend opening advances to upcoming week', () => {
-  assert.equal(initialWeekDate('2026-09-05',6),'2026-09-07');
-  assert.equal(initialWeekDate('2026-09-06',0),'2026-09-07');
+test('startup always opens the week containing today, including weekends', () => {
+  assert.equal(initialWeekDate('2026-09-05',6),'2026-08-31');
+  assert.equal(initialWeekDate('2026-09-06',0),'2026-08-31');
   assert.equal(initialWeekDate('2026-09-03',4),'2026-08-31');
 });
 
