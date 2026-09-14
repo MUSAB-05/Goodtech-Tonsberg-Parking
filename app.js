@@ -6,14 +6,15 @@ import { RoomDialogController } from './room-dialog-controller.js';
 import { ScheduleView } from './schedule-view.js';
 import {
   addDays, bookingKey, bookingsForDate, duplicateAssignments, flattenSpaces, formatDate, groupUsage,
-  initialWeekDate, isoWeek, isoWeekYear, monthKey, parseDrivers, weekDates
+  initialWeekDate, isoWeek, isoWeekYear, monthKey, normalAllocationUsage, parseDrivers, weekDates
 } from './booking-utils.js';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 const state = {
-  groups: [], meetingRoom: null, drivers: [], spaces: [], bookings: {}, week: [], selectedDate: '', today: '', selectedSpace: null
+  groups: [], meetingRoom: null, drivers: [], spaces: [], bookings: {}, week: [], selectedDate: '', today: '', selectedSpace: null,
+  spaceFrequency: {}
 };
 let refreshInFlight = false;
 let mutationsInFlight = 0;
@@ -32,7 +33,8 @@ const backend = new ParkingBackend({
 
 const map = new ParkingMap($('#parking-map'), {
   onSelect: openPicker,
-  onDateChange: changeMapDate
+  onDateChange: changeMapDate,
+  onToday: goToday
 });
 
 const roomView = new MeetingRoomView($('#meeting-room'), {
@@ -63,6 +65,56 @@ function driverById(id) { return state.drivers.find(driver => driver.id === id);
 function dayBookings(date) { return bookingsForDate(state.bookings, date, state.spaces); }
 function duplicatesFor(date) { return duplicateAssignments(dayBookings(date)); }
 function visibleMonths() { return [...new Set(state.week.map(monthKey))]; }
+
+function parkingKeyParts(key) {
+  const match = /^(\d{4}-\d{2}-\d{2})__(.+)$/.exec(String(key || ''));
+  if (!match || match[2].startsWith('meeting-room__')) return null;
+  return { date: match[1], spaceId: match[2] };
+}
+
+function mergeVisibleMonths(current, remote, months) {
+  const visible = new Set(months || []);
+  const merged = {};
+  for (const [key, value] of Object.entries(current || {})) {
+    if (!visible.has(String(key).slice(0, 7))) merged[key] = value;
+  }
+  return Object.assign(merged, remote || {});
+}
+
+function localFrequencyForSpace(spaceId) {
+  const result = {};
+  const suffix = `__${spaceId}`;
+  for (const [key, booking] of Object.entries(state.bookings || {})) {
+    if (key.endsWith(suffix) && booking?.driverId && /^\d{4}-\d{2}-\d{2}__/.test(key)) result[key.slice(0,10)] = booking.driverId;
+  }
+  return result;
+}
+
+async function recordFrequencyForBookingKey(key, value) {
+  const parts = parkingKeyParts(key);
+  if (!parts) return;
+  try {
+    await backend.setSpaceFrequency(parts.spaceId, parts.date, value?.driverId || null);
+    state.spaceFrequency[parts.spaceId] = { ...(state.spaceFrequency[parts.spaceId] || {}), [parts.date]: value?.driverId || null };
+  } catch (error) {
+    console.warn('Could not update parking frequency history', parts.spaceId, error);
+  }
+}
+
+async function loadSpaceFrequency(spaceId) {
+  const local = localFrequencyForSpace(spaceId);
+  try {
+    const remote = await backend.getSpaceFrequency(spaceId);
+    const merged = { ...remote, ...local };
+    state.spaceFrequency[spaceId] = merged;
+    const missing = Object.entries(local).filter(([date, driverId]) => remote?.[date] !== driverId);
+    Promise.allSettled(missing.map(([date, driverId]) => backend.setSpaceFrequency(spaceId, date, driverId)));
+  } catch (error) {
+    state.spaceFrequency[spaceId] = { ...(state.spaceFrequency[spaceId] || {}), ...local };
+    console.warn('Could not load parking frequency history', spaceId, error);
+  }
+  if (state.selectedSpace?.spaceId === spaceId && $('#picker')?.open) renderDrivers();
+}
 
 function validPendingKey(key) { return /^\d{4}-\d{2}-\d{2}__.+/.test(String(key || '')); }
 function pendingValue(entry) {
@@ -113,10 +165,18 @@ async function flushPendingWrites() {
         clearPendingWrite(key);
         continue;
       }
+      const value = pendingValue(entry);
       try {
-        await backend.setBooking(key, pendingValue(entry));
+        if (parkingKeyParts(key) && value?.driverId) await backend.claimBooking(key, value);
+        else await backend.setBooking(key, value);
         clearPendingWrite(key);
+        await recordFrequencyForBookingKey(key, value);
       } catch (error) {
+        if (error?.kind === 'busy') {
+          // Old offline claims must never overwrite a space that somebody else now owns.
+          clearPendingWrite(key);
+          continue;
+        }
         failures.push(error);
         console.warn('Pending booking sync failed', key, error);
       }
@@ -159,7 +219,7 @@ function render() {
 
 function renderSummary(bookings) {
   $('#daily-summary').innerHTML = state.groups.map(group => {
-    const used = groupUsage(bookings, group);
+    const used = group.id === 'mg-basement' ? normalAllocationUsage(bookings, group) : groupUsage(bookings, group);
     const extra = group.id === 'mg-basement' && used > group.limit;
     const detail = group.id === 'mg-basement'
       ? (extra ? `${used}/${group.limit} ⚠ extra MG` : `${used}/${group.limit} normal allocation`)
@@ -178,6 +238,12 @@ function selectDate(date) {
 }
 
 function changeMapDate(date, amount) { selectDate(addDays(date, amount)); }
+function goToday() {
+  const now = osloNow();
+  state.today = now.date;
+  selectDate(now.date);
+  reloadBookings(true);
+}
 
 function openPicker(spaceId, date) {
   const space = spaceById(spaceId);
@@ -189,12 +255,26 @@ function openPicker(spaceId, date) {
   renderDrivers();
   $('#picker').showModal();
   render();
+  loadSpaceFrequency(spaceId);
 }
 
 function renderDrivers() {
   const query = $('#driver-search').value.trim().toLocaleLowerCase();
-  const filtered = state.drivers.filter(driver => driver.name.toLocaleLowerCase().includes(query));
-  $('#driver-list').innerHTML = filtered.length ? filtered.map(driver => `<button type="button" class="driver-option" data-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>Assign immediately</small></span></button>`).join('') : '<p class="empty-state">No employees found</p>';
+  const spaceId = state.selectedSpace?.spaceId;
+  const history = state.spaceFrequency[spaceId] || localFrequencyForSpace(spaceId);
+  const counts = new Map();
+  for (const driverId of Object.values(history || {})) {
+    if (!driverId) continue;
+    counts.set(driverId, (counts.get(driverId) || 0) + 1);
+  }
+  const filtered = state.drivers
+    .filter(driver => driver.name.toLocaleLowerCase().includes(query))
+    .sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.sortOrder - b.sortOrder);
+  $('#driver-list').innerHTML = filtered.length ? filtered.map(driver => {
+    const count = counts.get(driver.id) || 0;
+    const hint = count ? `${count} previous booking${count === 1 ? '' : 's'} here` : 'Assign immediately';
+    return `<button type="button" class="driver-option" data-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${esc(hint)}</small></span></button>`;
+  }).join('') : '<p class="empty-state">No employees found</p>';
   $('#driver-list').querySelectorAll('[data-driver-id]').forEach(element => element.addEventListener('click', () => saveParkingBooking(element.dataset.driverId)));
 }
 
@@ -207,18 +287,53 @@ async function updateParkingBooking(value) {
   if (!state.selectedSpace) return;
   const { spaceId, date } = state.selectedSpace;
   const key = bookingKey(date, spaceId);
-  if (value) state.bookings[key] = value; else delete state.bookings[key];
+  const current = state.bookings[key] || null;
+
+  if (value) {
+    if (current?.driverId) return toast('Place is busy.');
+    mutationsInFlight++;
+    try {
+      await backend.claimBooking(key, value);
+      state.bookings[key] = value;
+      clearPendingWrite(key);
+      await recordFrequencyForBookingKey(key, value);
+      $('#picker').close();
+      state.selectedSpace = null;
+      render();
+      setConnection('Live', 'live', 'Shared bookings are synchronized.');
+      toast(`${driverById(value.driverId)?.name || 'Employee'} assigned`);
+    } catch (error) {
+      if (error?.kind === 'busy') toast('Place is busy.');
+      else {
+        setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
+        toast('Could not claim the parking space. Try again.');
+      }
+    } finally {
+      mutationsInFlight--;
+      await reloadBookings(true);
+    }
+    return;
+  }
+
+  if (!current) {
+    $('#picker').close();
+    state.selectedSpace = null;
+    return;
+  }
+
+  delete state.bookings[key];
   $('#picker').close();
   mutationsInFlight++;
   render();
   try {
-    const result = await persistShared(key, value);
+    const result = await persistShared(key, null);
     if (result.synced) {
+      await recordFrequencyForBookingKey(key, null);
       setConnection('Live', 'live', 'Shared bookings are synchronized.');
-      toast(value ? `${driverById(value.driverId)?.name || 'Employee'} assigned` : 'Parking space cleared');
+      toast('Parking space cleared');
     } else {
-      setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Booking is saved on this device and will retry automatically.`);
-      toast('Saved on this device · shared sync pending');
+      setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Removal is saved on this device and will retry automatically.`);
+      toast('Removal saved on this device · shared sync pending');
     }
   } finally {
     mutationsInFlight--;
@@ -236,13 +351,15 @@ async function reloadBookings(force = false) {
       try { await flushPendingWrites(); }
       catch (error) { syncError = error; }
     }
-    let remote = {};
-    try { remote = await backend.getBookings(visibleMonths()); }
-    catch (error) {
+    const months = visibleMonths();
+    let nextBase = state.bookings || {};
+    try {
+      const remote = await backend.getBookings(months);
+      nextBase = mergeVisibleMonths(state.bookings, remote, months);
+    } catch (error) {
       syncError = syncError || error;
-      remote = state.bookings || {};
     }
-    const next = applyPendingWrites(remote);
+    const next = applyPendingWrites(nextBase);
     const nextFingerprint = fingerprint(next);
     if (force || nextFingerprint !== lastFingerprint) {
       state.bookings = next;
@@ -300,12 +417,12 @@ async function init() {
     state.groups = config.groups;
     state.meetingRoom = config.meetingRoom;
     state.drivers = parseDrivers(await driversResponse.text());
-    state.spaces = flattenSpaces(state.groups);
+    state.spaces = flattenSpaces(state.groups).sort((a, b) => a.displayOrder - b.displayOrder);
     const now = osloNow();
     state.today = now.date;
     const monday = initialWeekDate(now.date, now.weekday);
     state.week = weekDates(monday);
-    state.selectedDate = (now.weekday === 0 || now.weekday === 6) ? monday : now.date;
+    state.selectedDate = now.date;
     render();
     await reloadBookings(true);
   } catch (error) {
@@ -317,6 +434,7 @@ async function init() {
 
 $('#previous-week').addEventListener('click', () => shiftWeek(-1));
 $('#next-week').addEventListener('click', () => shiftWeek(1));
+$('#today-week')?.addEventListener('click', goToday);
 $('#driver-search').addEventListener('input', renderDrivers);
 $('#clear-booking').addEventListener('click', clearParkingBooking);
 $('#theme-toggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
