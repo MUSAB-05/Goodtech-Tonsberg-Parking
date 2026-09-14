@@ -1,26 +1,28 @@
-import { groupUsage } from './booking-utils.js';
+import { groupUsage, normalAllocationUsage } from './booking-utils.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
 export class ParkingMap {
-  constructor(container, { onSelect, onDateChange }) {
+  constructor(container, { onSelect, onDateChange, onToday }) {
     this.container = container;
     this.onSelect = onSelect;
     this.onDateChange = onDateChange;
+    this.onToday = onToday;
   }
 
   render(groups, bookings, date, drivers, duplicateMap) {
     const label = new Intl.DateTimeFormat('en-GB', { timeZone:'UTC', weekday:'long', day:'numeric', month:'long' }).format(new Date(`${date}T12:00:00Z`));
     const mg = groups.find(group => group.id === 'mg-basement');
-    const mgUsed = mg ? groupUsage(bookings, mg) : 0;
+    const mgUsed = mg ? normalAllocationUsage(bookings, mg) : 0;
     const mgAtLimit = Boolean(mg && mgUsed >= mg.limit);
     const mgOver = Boolean(mg && mgUsed > mg.limit);
 
     this.container.innerHTML = `
       <div class="map-heading">
-        <button class="icon-button" data-map-date="prev" aria-label="Previous map date">‹</button>
+        <button class="icon-button" data-map-date="prev" aria-label="Previous day">‹</button>
         <strong>${esc(label)}</strong>
-        <button class="icon-button" data-map-date="next" aria-label="Next map date">›</button>
+        <button class="compact-button map-today-button" data-map-date="today" type="button">Today</button>
+        <button class="icon-button" data-map-date="next" aria-label="Next day">›</button>
       </div>
       <div class="parking-map">
         ${this.mgMarkup(groups, bookings, drivers, duplicateMap, mgAtLimit, mgOver)}
@@ -33,6 +35,7 @@ export class ParkingMap {
     this.container.querySelectorAll('[data-space-id]').forEach(element => element.addEventListener('click', () => this.onSelect(element.dataset.spaceId, date)));
     this.container.querySelector('[data-map-date="prev"]')?.addEventListener('click', () => this.onDateChange(date, -1));
     this.container.querySelector('[data-map-date="next"]')?.addEventListener('click', () => this.onDateChange(date, 1));
+    this.container.querySelector('[data-map-date="today"]')?.addEventListener('click', () => this.onToday?.());
   }
 
   spotMarkup(space, bookings, drivers, duplicateMap, mgAtLimit = false) {
@@ -54,8 +57,9 @@ export class ParkingMap {
     const group = groups.find(item => item.id === 'mg-basement');
     if (!group) return '';
     const byId = new Map(group.spaces.map(space => [space.id, space]));
+    // Explicit slot order keeps the physical map stable across rerenders/breakpoints.
     const rightIds = ['mg-50','mg-51','mg-52','mg-53','mg-54'];
-    const used = groupUsage(bookings, group);
+    const used = normalAllocationUsage(bookings, group);
     return `<section class="map-group map-mg-basement ${overLimit ? 'group-warning' : ''}">
       <div class="map-group-title"><span>${esc(group.name)}</span><em>${overLimit ? `⚠ ${used}/${group.limit} extra usage` : `${used}/${group.limit} normal allocation`}</em></div>
       <div class="mg-layout">
