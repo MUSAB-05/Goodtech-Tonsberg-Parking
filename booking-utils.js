@@ -1,5 +1,6 @@
 export const ROOM_START_HOUR = 6;
 export const ROOM_END_HOUR = 18;
+export const GUEST_DRIVER_ID = 'guest';
 
 export function stableId(name) {
   return String(name)
@@ -7,6 +8,8 @@ export function stableId(name) {
     .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
+
+export function isGuestDriverId(driverId) { return String(driverId || '') === GUEST_DRIVER_ID; }
 
 export function parseDrivers(text) {
   return String(text).split(/\r?\n/).map(line => line.trim())
@@ -24,9 +27,9 @@ export function weekDates(date) {
   return Array.from({ length: 7 }, (_, index) => { const day = new Date(value); day.setUTCDate(value.getUTCDate() + index); return isoDate(day); });
 }
 
-export function initialWeekDate(todayIso, weekday) {
-  return weekday === 0 || weekday === 6 ? addDays(weekDates(todayIso)[0], 7) : weekDates(todayIso)[0];
-}
+// Always open the week containing today. Weekend users should still land on today,
+// not be silently moved into the following week.
+export function initialWeekDate(todayIso) { return weekDates(todayIso)[0]; }
 
 export function monthKey(date) { return String(date).slice(0, 7); }
 export function bookingKey(date, spaceId) { return `${date}__${spaceId}`; }
@@ -49,7 +52,14 @@ export function isoWeekYear(date) {
 }
 
 export function flattenSpaces(groups) {
-  return (groups || []).flatMap(group => group.spaces.map(space => ({ ...space, groupId: group.id, groupName: group.name, limit: group.limit })));
+  let displayOrder = 0;
+  return (groups || []).flatMap(group => group.spaces.map(space => ({
+    ...space,
+    groupId: group.id,
+    groupName: group.name,
+    limit: group.limit,
+    displayOrder: displayOrder++
+  })));
 }
 
 export function bookingsForDate(bookings, date, spaces) {
@@ -79,10 +89,11 @@ export function roomRangeIsFree(bookings, date, startHour, endHour, ignoreKey = 
   return !roomBookingsForDate(bookings, date).some(item => item.key !== ignoreKey && startHour < item.endHour && endHour > item.startHour);
 }
 
-export function duplicateAssignments(dayBookings) {
+export function duplicateAssignments(dayBookings, ignoredDriverIds = [GUEST_DRIVER_ID]) {
+  const ignored = new Set(ignoredDriverIds || []);
   const byDriver = new Map();
   for (const [spaceId, booking] of Object.entries(dayBookings || {})) {
-    if (!booking?.driverId) continue;
+    if (!booking?.driverId || ignored.has(booking.driverId)) continue;
     const ids = byDriver.get(booking.driverId) || [];
     ids.push(spaceId);
     byDriver.set(booking.driverId, ids);
@@ -94,6 +105,17 @@ export function duplicateSpaceIds(dayBookings) {
   return new Set([...duplicateAssignments(dayBookings).values()].flat());
 }
 
-export function groupUsage(dayBookings, group) {
-  return group.spaces.reduce((n, space) => n + (dayBookings?.[space.id]?.driverId ? 1 : 0), 0);
+export function groupUsage(dayBookings, group, ignoredDriverIds = []) {
+  const ignored = new Set(ignoredDriverIds || []);
+  return group.spaces.reduce((n, space) => {
+    const driverId = dayBookings?.[space.id]?.driverId;
+    return n + (driverId && !ignored.has(driverId) ? 1 : 0);
+  }, 0);
+}
+
+// MG's normal allocation is for employees. GUEST is intentionally excluded so
+// guest cars can use free MG spaces without consuming the 2-space allocation or
+// turning the remaining MG spaces yellow.
+export function normalAllocationUsage(dayBookings, group) {
+  return groupUsage(dayBookings, group, [GUEST_DRIVER_ID]);
 }
