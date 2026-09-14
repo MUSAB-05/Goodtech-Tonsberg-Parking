@@ -39,8 +39,11 @@
     </section>
 
     <section class="schedule-panel">
-      <div class="schedule-toolbar"><button id="previous-week" class="compact-button" type="button">← Previous</button><strong id="week-label"></strong><button id="next-week" class="compact-button" type="button">Next →</button></div>
-      <p class="mobile-hint">Swipe dates sideways. The parking-space column stays fixed.</p>
+      <div class="schedule-toolbar">
+        <button id="previous-week" class="compact-button" type="button">← Previous</button>
+        <div class="schedule-toolbar-center"><strong id="week-label"></strong><button id="today-week" class="compact-button today-button" type="button">Today</button></div>
+        <button id="next-week" class="compact-button" type="button">Next →</button>
+      </div>
       <div id="schedule" class="schedule-scroll"></div>
     </section>
   </main>
