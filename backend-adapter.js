@@ -3,9 +3,6 @@ export class ParkingBackend {
     this.baseUrl = String(baseUrl || 'https://mantledb.sh/v2').replace(/\/$/, '');
     this.namespace = String(namespace || '').trim();
     this.key = String(key || '').trim();
-    // Native window.fetch can throw "Illegal invocation" when stored as an object method
-    // and later called as this.fetchImpl(...). Always invoke the supplied fetch with
-    // globalThis as its receiver, matching WB26's window.fetch.bind(window) behavior.
     const nativeFetch = fetchImpl;
     this.fetchImpl = (...args) => Reflect.apply(nativeFetch, globalThis, args);
     this.timeoutMs = timeoutMs;
@@ -17,13 +14,13 @@ export class ParkingBackend {
     return `bookings/${month}`;
   }
 
+  frequencyPath(spaceId) { return `frequency/${encodeURIComponent(String(spaceId || ''))}`; }
   url(path) { return `${this.baseUrl}/${encodeURIComponent(this.namespace)}/${path}`; }
 
   async request(path, { method = 'GET', body } = {}) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
     try {
-      // Keep this intentionally aligned with the working WB26 Mantle adapter.
       const headers = { 'Content-Type': 'application/json' };
       if (this.key) headers['X-Mantle-Key'] = this.key;
       const response = await this.fetchImpl(this.url(path), {
@@ -43,7 +40,7 @@ export class ParkingBackend {
       }
       return data;
     } catch (error) {
-      if (error?.kind === 'http') throw error;
+      if (error?.kind === 'http' || error?.kind === 'busy') throw error;
       const wrapped = new Error(error?.name === 'AbortError' ? 'Shared storage timed out.' : 'Shared storage is unreachable.');
       wrapped.kind = 'network';
       wrapped.cause = error;
@@ -69,21 +66,51 @@ export class ParkingBackend {
     return Object.assign({}, ...docs);
   }
 
-  async patchMonth(month, changes) {
+  async patchPath(path, changes) {
     const clean = changes && typeof changes === 'object' ? changes : {};
     if (!Object.keys(clean).length) return;
     try {
-      await this.request(this.path(month), { method: 'PATCH', body: clean });
+      await this.request(path, { method: 'PATCH', body: clean });
     } catch (error) {
       if (error.status !== 404) throw error;
-      await this.request(this.path(month), { method: 'POST', body: {} });
-      await this.request(this.path(month), { method: 'PATCH', body: clean });
+      await this.request(path, { method: 'POST', body: {} });
+      await this.request(path, { method: 'PATCH', body: clean });
     }
   }
+
+  async patchMonth(month, changes) { return this.patchPath(this.path(month), changes); }
 
   valuesMatch(actual, expected) {
     const normalize = value => value == null ? null : value;
     return JSON.stringify(normalize(actual)) === JSON.stringify(normalize(expected));
+  }
+
+  busyError() {
+    const error = new Error('Place is busy.');
+    error.kind = 'busy';
+    return error;
+  }
+
+  async claimBooking(key, booking) {
+    const month = String(key).slice(0, 7);
+    const desired = booking ?? null;
+    if (!desired?.driverId) return this.setBooking(key, desired);
+
+    const current = await this.ensureMonth(month);
+    const existing = current?.[key] || null;
+    if (existing?.driverId) {
+      if (existing.driverId === desired.driverId) return existing;
+      throw this.busyError();
+    }
+
+    await this.patchMonth(month, { [key]: desired });
+
+    // Verify the final shared value. This catches near-simultaneous claims instead
+    // of allowing the browser to assume it owns a space that another user won.
+    const remote = await this.request(this.path(month));
+    const finalValue = remote?.[key] || null;
+    if (finalValue?.driverId !== desired.driverId) throw this.busyError();
+    return finalValue;
   }
 
   async setBooking(key, booking) {
@@ -93,8 +120,6 @@ export class ParkingBackend {
       await this.patchMonth(month, { [key]: desired });
       return;
     } catch (error) {
-      // A browser/proxy can occasionally lose the PATCH response after Mantle has already saved it.
-      // Verify remote state before declaring the write failed so the local retry queue cannot stick forever.
       try {
         const remote = await this.request(this.path(month));
         const actual = Object.prototype.hasOwnProperty.call(remote || {}, key) ? remote[key] : null;
@@ -113,6 +138,21 @@ export class ParkingBackend {
       grouped.get(month)[key] = value ?? null;
     }
     for (const [month, monthChanges] of grouped) await this.patchMonth(month, monthChanges);
+  }
+
+  async getSpaceFrequency(spaceId) {
+    try {
+      const result = await this.request(this.frequencyPath(spaceId));
+      return result && typeof result === 'object' && !Array.isArray(result) ? result : {};
+    } catch (error) {
+      if (error.status === 404) return {};
+      throw error;
+    }
+  }
+
+  async setSpaceFrequency(spaceId, date, driverId) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return;
+    await this.patchPath(this.frequencyPath(spaceId), { [date]: driverId || null });
   }
 
   async healthCheck() {
