@@ -14,7 +14,19 @@
   <link rel="stylesheet" href="./styles.css">
   <title>Goodtech Tønsberg Parking</title>
 </head>
-<body>
+<body class="access-locked">
+  <section id="access-gate" class="access-gate" role="dialog" aria-modal="true" aria-labelledby="access-title">
+    <form id="access-form" class="access-card">
+      <img class="access-logo" src="./assets/goodtech-logo.webp" alt="Goodtech">
+      <p class="eyebrow">EMPLOYEE ACCESS</p>
+      <h1 id="access-title">Tønsberg Parking</h1>
+      <p class="access-copy">Enter the shared access code.</p>
+      <input id="access-code" type="password" inputmode="numeric" autocomplete="current-password" maxlength="4" pattern="[0-9]{4}" aria-label="Access code" required autofocus>
+      <p id="access-error" class="access-error" role="alert" aria-live="polite"></p>
+      <button class="access-submit" type="submit">Unlock</button>
+    </form>
+  </section>
+
   <header class="topbar">
     <div class="brand">
       <img class="goodtech-logo" src="./assets/goodtech-logo.webp" alt="Goodtech">
@@ -60,7 +72,6 @@
   <dialog id="room-dialog" class="picker room-dialog"><div id="room-dialog-content"></div></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./app.js"></script>
-  <script type="module" src="./sync-diagnostics.js"></script>
+  <script type="module" src="./access-gate.js"></script>
 </body>
 </html>

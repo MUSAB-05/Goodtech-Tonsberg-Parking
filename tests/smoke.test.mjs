@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 const read=path=>fs.readFile(new URL(`../${path}`,import.meta.url),'utf8');
-const readCss=async()=>['styles/base.css','styles/overview.css','styles/schedule.css','styles/dialogs.css','styles/responsive.css'].reduce(async(acc,p)=>(await acc)+(await read(p)),Promise.resolve(''));
+const readCss=async()=>['styles/base.css','styles/overview.css','styles/schedule.css','styles/dialogs.css','styles/responsive.css','styles/access.css'].reduce(async(acc,p)=>(await acc)+(await read(p)),Promise.resolve(''));
 
-test('PWA files, Goodtech logo and install metadata are present', async()=>{
-  const [html,manifest,sw]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js')]);
-  assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/); assert.match(html,/sync-diagnostics\.js/);
+test('PWA files, Goodtech logo, install metadata and access gate are present', async()=>{
+  const [html,manifest,sw,gate]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js'),read('access-gate.js')]);
+  assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/); assert.match(html,/id="access-gate"/); assert.match(html,/access-gate\.js/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v10-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/sync-diagnostics\.js/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v11-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/access-gate\.js/); assert.match(sw,/styles\/access\.css/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(gate,/EXPECTED_HASH/); assert.match(gate,/sessionStorage/); assert.match(gate,/import\('\.\/app\.js'\)/); assert.doesNotMatch(gate,/['"]3111['"]/);
 });
 
 test('phone layout keeps the top overview compact and hides the weekly schedule', async()=>{
@@ -76,10 +77,10 @@ test('meeting room has daily 06-18 view and weekly availability row', async()=>{
   assert.match(room,/roomAvailability/); assert.match(html,/meeting-room/); assert.match(html,/room-dialog/);
 });
 
-test('app includes claimed shared storage, live polling and no login', async()=>{
-  const [app,schedule,html,config,backend]=await Promise.all([read('app.js'),read('schedule-view.js'),read('index.html'),read('config.js'),read('backend-adapter.js')]);
+test('app keeps the existing shared storage and live polling behind the access gate', async()=>{
+  const [app,schedule,config,backend,gate]=await Promise.all([read('app.js'),read('schedule-view.js'),read('config.js'),read('backend-adapter.js'),read('access-gate.js')]);
   assert.match(app,/APP_CONFIG\.pollMs/); assert.match(app,/initialWeekDate/); assert.match(app,/key: APP_CONFIG\.mantleKey/); assert.match(schedule,/Already has/); assert.match(schedule,/TODAY/); assert.match(app,/Sync issue/);
-  assert.match(config,/mantleKey:/); assert.match(backend,/X-Mantle-Key/); assert.doesNotMatch(html,/password/i); assert.doesNotMatch(html,/login/i);
+  assert.match(config,/mantleKey:/); assert.match(backend,/X-Mantle-Key/); assert.match(gate,/access code|EXPECTED_HASH/i);
 });
 
 test('sync diagnostics tests browser reachability, authenticated API and queued writes', async()=>{

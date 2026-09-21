@@ -3,6 +3,7 @@
 @import url('./styles/schedule.css');
 @import url('./styles/dialogs.css');
 @import url('./styles/responsive.css');
+@import url('./styles/access.css');
 
 /* Goodtech contrast system. Dark and light are intentionally tuned separately. */
 :root{

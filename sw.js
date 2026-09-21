@@ -1,6 +1,6 @@
-const CACHE = 'gt-parking-shell-v10-booking-rules';
+const CACHE = 'gt-parking-shell-v11-access-gate';
 const SHELL = [
-  './','./index.html','./styles.css','./styles/base.css','./styles/overview.css','./styles/schedule.css','./styles/dialogs.css','./styles/responsive.css','./app.js','./sync-diagnostics.js','./schedule-view.js','./room-dialog-controller.js','./config.js','./backend-adapter.js','./booking-utils.js','./parking-map.js','./meeting-room.js',
+  './','./index.html','./styles.css','./styles/base.css','./styles/overview.css','./styles/schedule.css','./styles/dialogs.css','./styles/responsive.css','./styles/access.css','./access-gate.js','./app.js','./sync-diagnostics.js','./schedule-view.js','./room-dialog-controller.js','./config.js','./backend-adapter.js','./booking-utils.js','./parking-map.js','./meeting-room.js',
   './parking-config.json','./drivers.txt','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./assets/goodtech-logo.webp','./robots.txt'
 ];
 
