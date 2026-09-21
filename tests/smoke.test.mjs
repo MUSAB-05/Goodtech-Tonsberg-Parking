@@ -89,3 +89,15 @@ test('sync diagnostics tests browser reachability, authenticated API and queued 
 });
 
 test('robots discourages indexing', async()=>{ assert.match(await read('robots.txt'),/Disallow: \//); });
+
+
+test('install button has a reliable mobile fallback when native prompt is unavailable', async()=>{
+  const [html,app]=await Promise.all([read('index.html'),read('app.js')]);
+  assert.match(html,/id="install-app"[^>]*>＋ App<\/button>/);
+  assert.match(html,/id="install-dialog"/);
+  assert.match(app,/beforeinstallprompt/);
+  assert.match(app,/showInstallHelp/);
+  assert.match(app,/Add to Home Screen/);
+  assert.match(app,/appinstalled/);
+  assert.match(app,/isStandaloneApp/);
+});

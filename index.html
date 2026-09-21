@@ -34,7 +34,7 @@
     </div>
     <div class="top-actions">
       <span id="connection" class="connection checking" title="Checking shared storage">Connecting…</span>
-      <button id="install-app" class="compact-button" type="button" hidden>＋ App</button>
+      <button id="install-app" class="compact-button" type="button">＋ App</button>
       <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle light mode">☼</button>
     </div>
   </header>
@@ -70,6 +70,17 @@
   </dialog>
 
   <dialog id="room-dialog" class="picker room-dialog"><div id="room-dialog-content"></div></dialog>
+
+  <dialog id="install-dialog" class="picker install-dialog">
+    <div class="install-dialog-inner">
+      <div class="picker-head">
+        <div><p class="eyebrow">INSTALL APP</p><h2>Add to Home Screen</h2></div>
+        <button id="install-dialog-close" class="icon-button" type="button" aria-label="Close">×</button>
+      </div>
+      <p id="install-help" class="install-help"></p>
+    </div>
+  </dialog>
+
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="./access-gate.js"></script>

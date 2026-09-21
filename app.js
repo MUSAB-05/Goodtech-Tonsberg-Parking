@@ -448,18 +448,76 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('online', () => { setConnection('Reconnecting…', 'checking', 'Internet connection restored; checking shared storage.'); reloadBookings(true); });
 window.addEventListener('offline', () => setConnection('Offline', 'offline', 'This device is offline.'));
 
+function isStandaloneApp() {
+  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isAppleMobile() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function updateInstallButton() {
+  const button = $('#install-app');
+  if (!button) return;
+  button.hidden = isStandaloneApp();
+}
+
+function showInstallHelp() {
+  const help = $('#install-help');
+  if (help) {
+    if (isAppleMobile()) {
+      help.textContent = 'iPhone / iPad: tap Share in Safari, then choose “Add to Home Screen”.';
+    } else if (/Android/i.test(navigator.userAgent)) {
+      help.textContent = 'Android: open the browser menu (⋮), then choose “Install app” or “Add to Home screen”.';
+    } else {
+      help.textContent = 'Open your browser menu and choose “Install app”, “Apps → Install”, or “Create shortcut”, depending on your browser.';
+    }
+  }
+  const dialog = $('#install-dialog');
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
 window.addEventListener('beforeinstallprompt', event => {
   event.preventDefault();
   installPrompt = event;
-  $('#install-app').hidden = false;
+  updateInstallButton();
 });
-$('#install-app').addEventListener('click', async () => {
-  if (!installPrompt) return toast('Use your browser menu → Install app / Add to Home Screen.');
-  installPrompt.prompt();
-  await installPrompt.userChoice;
+
+window.addEventListener('appinstalled', () => {
   installPrompt = null;
-  $('#install-app').hidden = true;
+  updateInstallButton();
+  toast('App installed');
 });
+
+$('#install-app')?.addEventListener('click', async () => {
+  if (isStandaloneApp()) {
+    updateInstallButton();
+    return;
+  }
+
+  if (!installPrompt) {
+    showInstallHelp();
+    return;
+  }
+
+  installPrompt.prompt();
+  const choice = await installPrompt.userChoice;
+  installPrompt = null;
+
+  if (choice?.outcome === 'accepted') {
+    $('#install-app').hidden = true;
+  } else {
+    updateInstallButton();
+  }
+});
+
+$('#install-dialog-close')?.addEventListener('click', () => $('#install-dialog')?.close());
+$('#install-dialog')?.addEventListener('click', event => {
+  if (event.target === $('#install-dialog')) $('#install-dialog').close();
+});
+
+updateInstallButton();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { updateViaCache:'none' })
