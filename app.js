@@ -23,7 +23,7 @@ let installPrompt = null;
 let lastConnectionError = '';
 const PENDING_KEY = 'gt-parking-pending-v1';
 const PAYDAY_SLOT_ID = 'payday-drinks';
-const PAYDAY_THRESHOLD = 3;
+const PAYDAY_THRESHOLD = 4;
 let pendingWrites = loadPendingWrites();
 let pendingFlushInFlight = false;
 
@@ -241,10 +241,10 @@ function renderPaydayMobile() {
     const status = paydayStatus(date);
     const day = formatDate(date, { weekday:'short' });
     const dateLabel = formatDate(date, { day:'numeric', month:'short' });
-    const value = status.confirmed ? '🍻 17:00' : status.count ? `${status.count}/${PAYDAY_THRESHOLD}` : 'Stem';
+    const value = status.confirmed ? '🍻 17:00' : 'Vote';
     return `<button type="button" class="payday-mobile-day ${status.confirmed ? 'confirmed' : ''} ${date === state.today ? 'today' : ''}" data-payday-mobile-date="${date}"><span>${esc(day)}</span><b>${esc(dateLabel)}</b><strong>${value}</strong></button>`;
   }).join('');
-  container.innerHTML = `<div class="payday-mobile-head"><div><small>SOCIAL</small><strong>🍻 Lønningspils</strong></div><span>3 personer → 17:00</span></div><div class="payday-mobile-days">${days}</div>`;
+  container.innerHTML = `<div class="payday-mobile-head"><div><small>SOSIALT</small><strong>🍻 Lønningspils</strong></div></div><div class="payday-mobile-days">${days}</div>`;
   container.querySelectorAll('[data-payday-mobile-date]').forEach(button => button.addEventListener('click', () => openPaydayVotes(button.dataset.paydayMobileDate)));
 }
 
@@ -264,17 +264,17 @@ function renderPaydayDialog() {
   const drivers = state.drivers.filter(driver => driver.id !== 'guest');
   const headline = status.confirmed
     ? '🍻 Lønningspils er bekreftet kl. 17:00'
-    : `${status.count}/${PAYDAY_THRESHOLD} kan · trenger ${PAYDAY_THRESHOLD - status.count} til`;
+    : 'Hvem kan denne dagen?';
   content.innerHTML = `<div class="payday-dialog-inner">
     <div class="picker-head">
       <div><p class="eyebrow">LØNNINGSPILS</p><h2>${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}</h2></div>
       <button class="icon-button" type="button" data-payday-close aria-label="Close">×</button>
     </div>
     <p class="payday-dialog-status ${status.confirmed ? 'confirmed' : ''}">${esc(headline)}</p>
-    <p class="payday-dialog-help">Trykk på navnet ditt for å melde at du kan denne dagen. Ved 3 eller flere blir dagen automatisk satt til kl. 17:00.</p>
+    <p class="payday-dialog-help">Trykk på navnet ditt hvis du kan denne dagen. Når nok personer kan, blir dagen automatisk bekreftet kl. 17:00.</p>
     <div class="driver-list payday-voter-list">${drivers.map(driver => {
       const canJoin = selected.has(driver.id);
-      return `<button type="button" class="driver-option payday-voter ${canJoin ? 'selected' : ''}" data-payday-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${canJoin ? '✓ Kan' : 'Trykk for å stemme'}</small></span></button>`;
+      return `<button type="button" class="driver-option payday-voter ${canJoin ? 'selected' : ''}" data-payday-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${canJoin ? '✓ Kan' : 'Vote'}</small></span></button>`;
     }).join('')}</div>
   </div>`;
   content.querySelector('[data-payday-close]')?.addEventListener('click', () => $('#payday-dialog')?.close());
@@ -306,12 +306,12 @@ async function togglePaydayVote(driverId) {
     render();
     renderPaydayDialog();
     if (value?.confirmed) toast('🍻 Lønningspils bekreftet kl. 17:00');
-    else toast(shouldJoin ? 'Stemmen din er lagt til' : 'Stemmen din er fjernet');
+    else toast(shouldJoin ? 'Du er lagt til' : 'Du er fjernet');
     setConnection('Live', 'live', 'Shared bookings are synchronized.');
   } catch (error) {
     console.error(error);
     setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
-    toast('Kunne ikke lagre lønningspils-stemmen. Prøv igjen.');
+    toast('Kunne ikke lagre valget. Prøv igjen.');
   } finally {
     mutationsInFlight--;
     await reloadBookings(true);

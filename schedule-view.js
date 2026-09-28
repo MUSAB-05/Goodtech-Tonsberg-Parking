@@ -2,7 +2,7 @@ import { bookingKey, formatDate, normalAllocationUsage, roomAvailability } from 
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const PAYDAY_SLOT_ID = 'payday-drinks';
-const PAYDAY_THRESHOLD = 3;
+const PAYDAY_THRESHOLD = 4;
 
 export class ScheduleView {
   constructor(container, { state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails, openPaydayVotes }) {
@@ -29,9 +29,9 @@ export class ScheduleView {
     const confirmed = count >= PAYDAY_THRESHOLD;
     const selected = date === this.state.selectedDate;
     const classes = ['schedule-cell','payday-cell',confirmed ? 'confirmed' : count ? 'interested' : '',date === this.state.today ? 'today' : '',selected ? 'selected' : ''].filter(Boolean).join(' ');
-    const main = confirmed ? '🍻 17:00' : count ? `${count}/${PAYDAY_THRESHOLD} med` : 'Stem';
-    const note = confirmed ? 'Lønningspils!' : '3 personer = lønningspils';
-    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${count} interested"><span>${main}</span><small>${note}</small></button>`;
+    const main = confirmed ? '🍻 17:00' : 'Vote';
+    const note = confirmed ? 'Lønningspils!' : '';
+    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${confirmed ? 'bekreftet kl. 17:00' : 'åpen for valg'}"><span>${main}</span>${note ? `<small>${note}</small>` : ''}</button>`;
   }
 
   roomWeekBar(date) {
@@ -47,7 +47,7 @@ export class ScheduleView {
       return `<button class="day-head ${selected ? 'selected' : ''} ${today ? 'today' : ''}" data-date="${date}"><span>${esc(formatDate(date, { weekday:'short' }))}${today ? ' · TODAY' : ''}</span><b>${esc(formatDate(date, { day:'numeric', month:'short' }))}</b></button>`;
     }).join('');
 
-    const paydayRow = `<div class="schedule-row payday-row"><div class="space-name"><small>SOCIAL</small><strong>🍻 Lønningspils</strong></div>${this.state.week.map(date => this.paydayCell(date)).join('')}</div>`;
+    const paydayRow = `<div class="schedule-row payday-row"><div class="space-name"><small>SOSIALT</small><strong>🍻 Lønningspils</strong></div>${this.state.week.map(date => this.paydayCell(date)).join('')}</div>`;
 
     const orderedSpaces = [...this.state.spaces].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
     const rows = orderedSpaces.map(space => {
