@@ -223,6 +223,15 @@ function render() {
 
 function paydayKey(date) { return bookingKey(date, PAYDAY_SLOT_ID); }
 
+function formatPaydayDate(date) {
+  return new Intl.DateTimeFormat('nb-NO', {
+    timeZone:'UTC',
+    weekday:'long',
+    day:'numeric',
+    month:'long'
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
 function paydayVoteIds(date, source = state.bookings) {
   const value = source?.[paydayKey(date)];
   const valid = new Set(state.drivers.filter(driver => driver.id !== 'guest').map(driver => driver.id));
@@ -267,7 +276,7 @@ function renderPaydayDialog() {
     : 'Hvem kan denne dagen?';
   content.innerHTML = `<div class="payday-dialog-inner">
     <div class="picker-head">
-      <div><p class="eyebrow">LØNNINGSPILS</p><h2>${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}</h2></div>
+      <div><p class="eyebrow">LØNNINGSPILS</p><h2>${esc(formatPaydayDate(date))}</h2></div>
       <button class="icon-button" type="button" data-payday-close aria-label="Close">×</button>
     </div>
     <p class="payday-dialog-status ${status.confirmed ? 'confirmed' : ''}">${esc(headline)}</p>

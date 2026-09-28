@@ -110,3 +110,14 @@ test('lønningspils voting is shown above parking and confirms at four people fo
   assert.match(app,/PAYDAY_THRESHOLD = 4/); assert.match(app,/startHour: 17/); assert.match(app,/togglePaydayVote/); assert.match(app,/driver\.id !== 'guest'/); assert.match(app,/'Vote'/); assert.doesNotMatch(app,/3 personer|trenger \$\{PAYDAY_THRESHOLD/);
   assert.match(css,/payday-cell\.confirmed/); assert.match(css,/payday-mobile/);
 });
+
+
+test('payday dialog has compact dedicated layout and Norwegian date heading', async()=>{
+  const [app,css]=await Promise.all([read('app.js'),read('styles/dialogs.css')]);
+  assert.match(app,/Intl\.DateTimeFormat\('nb-NO'/);
+  assert.match(app,/formatPaydayDate/);
+  assert.match(css,/\.payday-dialog\{width:min\(620px/);
+  assert.match(css,/\.payday-dialog-inner\{padding:24px/);
+  assert.match(css,/\.payday-voter-list\{grid-template-columns:repeat\(2/);
+  assert.match(css,/@media\(max-width:620px\)[\s\S]*?\.payday-voter-list\{grid-template-columns:1fr/);
+});
