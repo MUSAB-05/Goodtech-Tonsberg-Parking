@@ -178,3 +178,14 @@ test('desktop hero cards share one aligned height and balanced grid', async()=>{
   assert.match(css,/\.hero-event-card,\.green-deeds-card\{width:100%;min-width:0;min-height:62px;height:62px\}/);
   assert.match(css,/\.summary-item\{width:100%;min-width:0;min-height:62px;align-content:center\}/);
 });
+
+
+test('mobile social section is placed after the main parking content', async()=>{
+  const html=await read('index.html');
+  const overview=html.indexOf('class="overview-grid"');
+  const schedule=html.indexOf('class="schedule-panel"');
+  const social=html.indexOf('id="payday-mobile"');
+  assert.ok(overview >= 0 && schedule >= 0 && social >= 0);
+  assert.ok(social > overview);
+  assert.ok(social > schedule);
+});
