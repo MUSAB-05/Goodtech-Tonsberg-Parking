@@ -112,10 +112,10 @@ test('lønningspils voting is shown above parking and confirms at four people fo
 });
 
 
-test('payday dialog has compact dedicated layout and Norwegian date heading', async()=>{
+test('payday dialog has compact dedicated layout and simple English copy', async()=>{
   const [app,css]=await Promise.all([read('app.js'),read('styles/dialogs.css')]);
-  assert.match(app,/Intl\.DateTimeFormat\('nb-NO'/);
-  assert.match(app,/formatPaydayDate/);
+  assert.match(app,/Intl\.DateTimeFormat\('en-GB'/);
+  assert.match(app,/formatPaydayDate/); assert.match(app,/Who can join\?/); assert.match(app,/Confirmed · 17:00/); assert.match(app,/✓ In/); assert.doesNotMatch(app,/Trykk på navnet|Hvem kan denne dagen|bekreftet kl\./);
   assert.match(css,/\.payday-dialog\{width:min\(620px/);
   assert.match(css,/\.payday-dialog-inner\{padding:24px/);
   assert.match(css,/\.payday-voter-list\{grid-template-columns:repeat\(2/);

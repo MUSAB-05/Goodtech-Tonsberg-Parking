@@ -224,7 +224,7 @@ function render() {
 function paydayKey(date) { return bookingKey(date, PAYDAY_SLOT_ID); }
 
 function formatPaydayDate(date) {
-  return new Intl.DateTimeFormat('nb-NO', {
+  return new Intl.DateTimeFormat('en-GB', {
     timeZone:'UTC',
     weekday:'long',
     day:'numeric',
@@ -272,18 +272,17 @@ function renderPaydayDialog() {
   const selected = new Set(status.voterIds);
   const drivers = state.drivers.filter(driver => driver.id !== 'guest');
   const headline = status.confirmed
-    ? '🍻 Lønningspils er bekreftet kl. 17:00'
-    : 'Hvem kan denne dagen?';
+    ? '🍻 Confirmed · 17:00'
+    : 'Who can join?';
   content.innerHTML = `<div class="payday-dialog-inner">
     <div class="picker-head">
       <div><p class="eyebrow">LØNNINGSPILS</p><h2>${esc(formatPaydayDate(date))}</h2></div>
       <button class="icon-button" type="button" data-payday-close aria-label="Close">×</button>
     </div>
     <p class="payday-dialog-status ${status.confirmed ? 'confirmed' : ''}">${esc(headline)}</p>
-    <p class="payday-dialog-help">Trykk på navnet ditt hvis du kan denne dagen. Når nok personer kan, blir dagen automatisk bekreftet kl. 17:00.</p>
     <div class="driver-list payday-voter-list">${drivers.map(driver => {
       const canJoin = selected.has(driver.id);
-      return `<button type="button" class="driver-option payday-voter ${canJoin ? 'selected' : ''}" data-payday-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${canJoin ? '✓ Kan' : 'Vote'}</small></span></button>`;
+      return `<button type="button" class="driver-option payday-voter ${canJoin ? 'selected' : ''}" data-payday-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${canJoin ? '✓ In' : 'Vote'}</small></span></button>`;
     }).join('')}</div>
   </div>`;
   content.querySelector('[data-payday-close]')?.addEventListener('click', () => $('#payday-dialog')?.close());
@@ -314,13 +313,13 @@ async function togglePaydayVote(driverId) {
     if (value) state.bookings[key] = value; else delete state.bookings[key];
     render();
     renderPaydayDialog();
-    if (value?.confirmed) toast('🍻 Lønningspils bekreftet kl. 17:00');
-    else toast(shouldJoin ? 'Du er lagt til' : 'Du er fjernet');
+    if (value?.confirmed) toast('🍻 Lønningspils confirmed · 17:00');
+    else toast(shouldJoin ? "You're in" : 'Removed');
     setConnection('Live', 'live', 'Shared bookings are synchronized.');
   } catch (error) {
     console.error(error);
     setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
-    toast('Kunne ikke lagre valget. Prøv igjen.');
+    toast('Could not save. Try again.');
   } finally {
     mutationsInFlight--;
     await reloadBookings(true);
