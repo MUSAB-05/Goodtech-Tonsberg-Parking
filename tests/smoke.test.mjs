@@ -155,3 +155,15 @@ test('green deeds are anonymous shared counters with bike, walk and carpool choi
   assert.match(css,/\.green-deeds-card/);
   assert.match(css,/\.green-deed-options/);
 });
+
+
+test('green deeds dialog uses robust delegated click handling and matching dashboard card layout', async()=>{
+  const [html,app,css]=await Promise.all([read('index.html'),read('app.js'),readCss()]);
+  assert.match(html,/GREEN DEEDS/);
+  assert.match(html,/Bike · Walk · Carpool/);
+  assert.match(app,/function openDialogSafe/);
+  assert.match(app,/event\.target\.closest\?\.\('#green-deeds'\)/);
+  assert.match(app,/event\.target\.closest\?\.\('\[data-green-deed\]'\)/);
+  assert.match(css,/\.hero-event-card,\.green-deeds-card\{display:grid/);
+  assert.match(css,/\.hero-event-card\{flex:2\.6 1 520px;min-width:420px\}/);
+});

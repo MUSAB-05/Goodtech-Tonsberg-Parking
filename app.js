@@ -170,6 +170,26 @@ function renderGreenDeeds() {
   if (count) count.textContent = String(greenDeedCount());
 }
 
+function openDialogSafe(dialog) {
+  if (!dialog || dialog.open) return;
+  try {
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  } catch {
+    dialog.setAttribute('open', '');
+  }
+}
+
+function closeDialogSafe(dialog) {
+  if (!dialog) return;
+  try {
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  } catch {
+    dialog.removeAttribute('open');
+  }
+}
+
 async function refreshGreenDeeds() {
   try {
     state.greenDeeds = await backend.getGreenDeeds();
@@ -187,7 +207,7 @@ async function addGreenDeed(type) {
     await backend.addGreenDeed(id, entry);
     state.greenDeeds[id] = entry;
     renderGreenDeeds();
-    $('#green-deeds-dialog')?.close();
+    closeDialogSafe($('#green-deeds-dialog'));
     toast('🌱 Green deed added');
   } catch (error) {
     console.error(error);
@@ -694,13 +714,30 @@ $('#today-week')?.addEventListener('click', goToday);
 $('#driver-search').addEventListener('input', renderDrivers);
 $('#clear-booking').addEventListener('click', clearParkingBooking);
 $('#theme-toggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
-$('#green-deeds')?.addEventListener('click', () => $('#green-deeds-dialog')?.showModal());
-$('#green-deeds-close')?.addEventListener('click', () => $('#green-deeds-dialog')?.close());
-$('#green-deeds-dialog')?.addEventListener('click', event => {
-  if (event.target === $('#green-deeds-dialog')) $('#green-deeds-dialog').close();
+document.addEventListener('click', event => {
+  const greenCard = event.target.closest?.('#green-deeds');
+  if (greenCard) {
+    event.preventDefault();
+    openDialogSafe($('#green-deeds-dialog'));
+    return;
+  }
+
+  const closeButton = event.target.closest?.('#green-deeds-close');
+  if (closeButton) {
+    event.preventDefault();
+    closeDialogSafe($('#green-deeds-dialog'));
+    return;
+  }
+
+  const deedButton = event.target.closest?.('[data-green-deed]');
+  if (deedButton) {
+    event.preventDefault();
+    addGreenDeed(deedButton.dataset.greenDeed);
+  }
 });
-document.querySelectorAll('[data-green-deed]').forEach(button => {
-  button.addEventListener('click', () => addGreenDeed(button.dataset.greenDeed));
+
+$('#green-deeds-dialog')?.addEventListener('click', event => {
+  if (event.target === $('#green-deeds-dialog')) closeDialogSafe($('#green-deeds-dialog'));
 });
 
 document.addEventListener('visibilitychange', () => {
