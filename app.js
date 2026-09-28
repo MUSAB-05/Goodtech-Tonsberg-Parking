@@ -14,7 +14,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;'
 
 const state = {
   groups: [], meetingRoom: null, drivers: [], spaces: [], bookings: {}, week: [], selectedDate: '', today: '', selectedSpace: null,
-  spaceFrequency: {}, paydayEvents: {}
+  spaceFrequency: {}, paydayEvents: {}, greenDeeds: {}
 };
 let refreshInFlight = false;
 let mutationsInFlight = 0;
@@ -144,7 +144,7 @@ function renderEventCountdown() {
   const days = daysUntil(state.today, event.date);
   const countdown = days === 0 ? 'Today' : days === 1 ? '1 day' : `${days} days`;
   element.hidden = false;
-  element.textContent = `${event.icon} ${event.name} · ${countdown}`;
+  element.innerHTML = `<span>NEXT EVENT</span><strong>${event.icon} ${esc(event.name)}</strong><b>${esc(countdown)}</b>`;
   element.title = `${event.name} · ${formatPaydayDate(event.date)}`;
 }
 
@@ -157,6 +157,41 @@ async function refreshPaydayEvents(force = false) {
     renderEventCountdown();
   } catch (error) {
     console.warn('Could not refresh Lønningspils countdown', error);
+  }
+}
+
+
+function greenDeedCount() {
+  return Object.values(state.greenDeeds || {}).filter(entry => entry && ['bike','walk','carpool'].includes(entry.type)).length;
+}
+
+function renderGreenDeeds() {
+  const count = $('#green-deeds-count');
+  if (count) count.textContent = String(greenDeedCount());
+}
+
+async function refreshGreenDeeds() {
+  try {
+    state.greenDeeds = await backend.getGreenDeeds();
+    renderGreenDeeds();
+  } catch (error) {
+    console.warn('Could not refresh Green deeds', error);
+  }
+}
+
+async function addGreenDeed(type) {
+  if (!['bike','walk','carpool'].includes(type)) return;
+  const id = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const entry = { type, date:state.today, createdAt:new Date().toISOString() };
+  try {
+    await backend.addGreenDeed(id, entry);
+    state.greenDeeds[id] = entry;
+    renderGreenDeeds();
+    $('#green-deeds-dialog')?.close();
+    toast('🌱 Green deed added');
+  } catch (error) {
+    console.error(error);
+    toast('Could not save. Try again.');
   }
 }
 
@@ -317,6 +352,7 @@ function render() {
   $('#week-label').textContent = `Week ${String(isoWeek(state.week[0])).padStart(2,'0')} · ${isoWeekYear(state.week[0])}`;
   renderSummary(bookings);
   renderEventCountdown();
+  renderGreenDeeds();
   renderPaydayMobile();
   scheduleView.render();
   map.render(state.groups, bookings, state.selectedDate, state.drivers, duplicates);
@@ -584,6 +620,7 @@ async function reloadBookings(force = false) {
       render();
     }
     await refreshPaydayEvents(force);
+    if (force) await refreshGreenDeeds();
     const pendingCount = Object.keys(pendingWrites).length;
     if (pendingCount) {
       setConnection(`Sync pending (${pendingCount})`, 'pending', `${syncError?.message || 'Shared storage unavailable.'} ${pendingCount} local change${pendingCount === 1 ? '' : 's'} queued for retry.`);
@@ -642,7 +679,7 @@ async function init() {
     state.week = weekDates(monday);
     state.selectedDate = now.date;
     render();
-    await refreshPaydayEvents(true);
+    await Promise.all([refreshPaydayEvents(true), refreshGreenDeeds()]);
     await reloadBookings(true);
   } catch (error) {
     console.error(error);
@@ -657,6 +694,14 @@ $('#today-week')?.addEventListener('click', goToday);
 $('#driver-search').addEventListener('input', renderDrivers);
 $('#clear-booking').addEventListener('click', clearParkingBooking);
 $('#theme-toggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
+$('#green-deeds')?.addEventListener('click', () => $('#green-deeds-dialog')?.showModal());
+$('#green-deeds-close')?.addEventListener('click', () => $('#green-deeds-dialog')?.close());
+$('#green-deeds-dialog')?.addEventListener('click', event => {
+  if (event.target === $('#green-deeds-dialog')) $('#green-deeds-dialog').close();
+});
+document.querySelectorAll('[data-green-deed]').forEach(button => {
+  button.addEventListener('click', () => addGreenDeed(button.dataset.greenDeed));
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {

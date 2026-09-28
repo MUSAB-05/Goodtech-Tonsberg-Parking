@@ -33,7 +33,6 @@
       <div class="brand-copy"><h1>Tønsberg Parking</h1><p class="subtitle">Parking & meeting room board</p></div>
     </div>
     <div class="top-actions">
-      <span id="event-countdown" class="event-countdown" title="Next event">Loading event…</span>
       <span id="connection" class="connection checking" title="Checking shared storage">Connecting…</span>
       <button id="install-app" class="compact-button" type="button">＋ App</button>
       <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle light mode">☼</button>
@@ -42,7 +41,14 @@
 
   <main>
     <section class="hero-row">
-      <div><p class="eyebrow">LIVE OFFICE OVERVIEW</p><h2 id="selected-date-title">Selected date</h2></div>
+      <div class="hero-date"><p class="eyebrow">LIVE OFFICE OVERVIEW</p><h2 id="selected-date-title">Selected date</h2></div>
+      <div class="hero-status">
+        <div id="event-countdown" class="event-countdown hero-event-card" title="Next event"></div>
+        <button id="green-deeds" class="green-deeds-card" type="button" aria-label="Add green deed">
+          <span>🌱 Green deeds</span>
+          <strong id="green-deeds-count">0</strong>
+        </button>
+      </div>
       <div id="daily-summary" class="summary"></div>
     </section>
 
@@ -75,6 +81,20 @@
   <dialog id="room-dialog" class="picker room-dialog"><div id="room-dialog-content"></div></dialog>
 
   <dialog id="payday-dialog" class="picker payday-dialog"><div id="payday-dialog-content"></div></dialog>
+
+  <dialog id="green-deeds-dialog" class="picker green-deeds-dialog">
+    <div class="green-deeds-dialog-inner">
+      <div class="picker-head">
+        <div><p class="eyebrow">GREEN DEED</p><h2>How did you get to work?</h2></div>
+        <button id="green-deeds-close" class="icon-button" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="green-deed-options">
+        <button type="button" data-green-deed="bike">🚲 <strong>Bike</strong></button>
+        <button type="button" data-green-deed="walk">🚶 <strong>Walk</strong></button>
+        <button type="button" data-green-deed="carpool">🚗 <strong>Carpool</strong></button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="install-dialog" class="picker install-dialog">
     <div class="install-dialog-inner">

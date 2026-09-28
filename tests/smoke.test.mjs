@@ -123,9 +123,9 @@ test('payday dialog has compact dedicated layout and simple English copy', async
 });
 
 
-test('top bar counts down to confirmed lønningspils before seasonal events', async()=>{
+test('hero dashboard counts down to confirmed lønningspils before seasonal events', async()=>{
   const [html,app,backend,css]=await Promise.all([read('index.html'),read('app.js'),read('backend-adapter.js'),readCss()]);
-  assert.match(html,/id="event-countdown"/);
+  assert.match(html,/class="hero-status"/); assert.match(html,/id="event-countdown"/); assert.doesNotMatch(html,/Loading event/);
   assert.match(app,/confirmedPaydayDates/);
   assert.match(app,/name:'Lønningspils'/);
   assert.match(app,/name:'Halloween'/);
@@ -138,4 +138,20 @@ test('top bar counts down to confirmed lønningspils before seasonal events', as
   assert.match(backend,/getPaydayEvents/);
   assert.match(backend,/setPaydayEvent/);
   assert.match(css,/\.event-countdown/);
+});
+
+
+test('green deeds are anonymous shared counters with bike, walk and carpool choices', async()=>{
+  const [html,app,backend,css]=await Promise.all([read('index.html'),read('app.js'),read('backend-adapter.js'),readCss()]);
+  assert.match(html,/id="green-deeds"/);
+  assert.match(html,/data-green-deed="bike"/);
+  assert.match(html,/data-green-deed="walk"/);
+  assert.match(html,/data-green-deed="carpool"/);
+  assert.match(app,/function addGreenDeed/);
+  assert.match(app,/greenDeedCount/);
+  assert.match(backend,/getGreenDeeds/);
+  assert.match(backend,/addGreenDeed/);
+  assert.doesNotMatch(app,/greenDeed.*driverId|driverId.*greenDeed/i);
+  assert.match(css,/\.green-deeds-card/);
+  assert.match(css,/\.green-deed-options/);
 });
