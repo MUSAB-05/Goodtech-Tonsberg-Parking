@@ -137,7 +137,7 @@ test('hero dashboard counts down to confirmed lønningspils before seasonal even
   assert.match(app,/easterDate\(y\)/);
   assert.match(backend,/getPaydayEvents/);
   assert.match(backend,/setPaydayEvent/);
-  assert.match(css,/\.event-countdown/);
+  assert.match(css,/\.hero-event-card/);
 });
 
 
