@@ -1,7 +1,8 @@
 @media(min-width:1121px){
-  .hero-row{display:grid;grid-template-columns:250px minmax(0,1fr) 430px;gap:12px;align-items:stretch}
+  .hero-row{display:grid;grid-template-columns:270px minmax(0,1fr) 430px;gap:12px;align-items:stretch}
   .hero-date{display:grid;align-content:center;min-width:0}
-  .hero-status{display:grid;grid-template-columns:minmax(0,1fr) 225px;gap:8px;min-width:0}
+  .hero-date h2{white-space:nowrap}
+  .hero-status{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:8px;min-width:0}
   .hero-event-card,.green-deeds-card{width:100%;min-width:0;min-height:62px;height:62px}
   .summary{display:grid;grid-template-columns:126px 126px 162px;gap:8px;align-items:stretch;justify-content:end;min-width:0}
   .summary-item{width:100%;min-width:0;min-height:62px;align-content:center}

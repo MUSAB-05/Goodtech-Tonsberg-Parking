@@ -172,9 +172,9 @@ test('green deeds dialog uses robust delegated click handling and matching dashb
 test('desktop hero cards share one aligned height and balanced grid', async()=>{
   const css=await read('styles/responsive.css');
   assert.match(css,/@media\(min-width:1121px\)/);
-  assert.match(css,/grid-template-columns:250px minmax\(0,1fr\) 430px/);
-  assert.match(css,/grid-template-columns:minmax\(0,1fr\) 225px/);
-  assert.match(css,/grid-template-columns:126px 126px 162px/);
+  assert.match(css,/grid-template-columns:270px minmax\(0,1fr\) 430px/);
+  assert.match(css,/grid-template-columns:minmax\(0,1fr\) 260px/);
+  assert.match(css,/grid-template-columns:126px 126px 162px/); assert.match(css,/\.hero-date h2\{white-space:nowrap\}/);
   assert.match(css,/\.hero-event-card,\.green-deeds-card\{width:100%;min-width:0;min-height:62px;height:62px\}/);
   assert.match(css,/\.summary-item\{width:100%;min-width:0;min-height:62px;align-content:center\}/);
 });
