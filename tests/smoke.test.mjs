@@ -52,7 +52,7 @@ test('parking claims cannot overwrite an occupied place and use a simple busy me
 
 test('parking name picker ranks drivers using per-space booking frequency', async()=>{
   const [app,backend]=await Promise.all([read('app.js'),read('backend-adapter.js')]);
-  assert.match(app,/loadSpaceFrequency/); assert.match(app,/previous booking/); assert.match(app,/counts\.get\(b\.id\)/); assert.match(backend,/getSpaceFrequency/); assert.match(backend,/setSpaceFrequency/);
+  assert.match(app,/loadSpaceFrequency/); assert.match(app,/counts\.get\(b\.id\)/); assert.doesNotMatch(app,/previous booking/); assert.match(backend,/getSpaceFrequency/); assert.match(backend,/setSpaceFrequency/);
 });
 
 test('history keepalive follows the live Mantle config instead of a stale namespace', async()=>{
@@ -100,4 +100,13 @@ test('install button has a reliable mobile fallback when native prompt is unavai
   assert.match(app,/Add to Home Screen/);
   assert.match(app,/appinstalled/);
   assert.match(app,/isStandaloneApp/);
+});
+
+
+test('lønningspils voting is shown above parking and confirms at three people for 17:00', async()=>{
+  const [html,app,schedule,css]=await Promise.all([read('index.html'),read('app.js'),read('schedule-view.js'),read('styles/schedule.css')]);
+  assert.match(html,/id="payday-dialog"/); assert.match(html,/id="payday-mobile"/);
+  assert.match(schedule,/Lønningspils/); assert.match(schedule,/paydayRow/); assert.match(schedule,/PAYDAY_THRESHOLD = 3/);
+  assert.match(app,/PAYDAY_THRESHOLD = 3/); assert.match(app,/startHour: 17/); assert.match(app,/togglePaydayVote/); assert.match(app,/driver\.id !== 'guest'/);
+  assert.match(css,/payday-cell\.confirmed/); assert.match(css,/payday-mobile/);
 });

@@ -1,10 +1,12 @@
 import { bookingKey, formatDate, normalAllocationUsage, roomAvailability } from './booking-utils.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const PAYDAY_SLOT_ID = 'payday-drinks';
+const PAYDAY_THRESHOLD = 3;
 
 export class ScheduleView {
-  constructor(container, { state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails }) {
-    Object.assign(this, { container, state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails });
+  constructor(container, { state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails, openPaydayVotes }) {
+    Object.assign(this, { container, state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails, openPaydayVotes });
   }
 
   driverById(id) { return this.state.drivers.find(driver => driver.id === id); }
@@ -14,6 +16,22 @@ export class ScheduleView {
     const ids = this.duplicatesFor(date).get(driverId) || [];
     const other = ids.find(id => id !== spaceId);
     return other ? `⚠ Already has ${this.spaceById(other)?.name || other}` : '';
+  }
+
+  paydayVoteIds(date) {
+    const value = this.state.bookings[bookingKey(date, PAYDAY_SLOT_ID)];
+    return [...new Set(Array.isArray(value?.voterIds) ? value.voterIds.filter(Boolean) : [])];
+  }
+
+  paydayCell(date) {
+    const voters = this.paydayVoteIds(date);
+    const count = voters.length;
+    const confirmed = count >= PAYDAY_THRESHOLD;
+    const selected = date === this.state.selectedDate;
+    const classes = ['schedule-cell','payday-cell',confirmed ? 'confirmed' : count ? 'interested' : '',date === this.state.today ? 'today' : '',selected ? 'selected' : ''].filter(Boolean).join(' ');
+    const main = confirmed ? '🍻 17:00' : count ? `${count}/${PAYDAY_THRESHOLD} med` : 'Stem';
+    const note = confirmed ? 'Lønningspils!' : '3 personer = lønningspils';
+    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${count} interested"><span>${main}</span><small>${note}</small></button>`;
   }
 
   roomWeekBar(date) {
@@ -28,6 +46,8 @@ export class ScheduleView {
       const selected = date === this.state.selectedDate;
       return `<button class="day-head ${selected ? 'selected' : ''} ${today ? 'today' : ''}" data-date="${date}"><span>${esc(formatDate(date, { weekday:'short' }))}${today ? ' · TODAY' : ''}</span><b>${esc(formatDate(date, { day:'numeric', month:'short' }))}</b></button>`;
     }).join('');
+
+    const paydayRow = `<div class="schedule-row payday-row"><div class="space-name"><small>SOCIAL</small><strong>🍻 Lønningspils</strong></div>${this.state.week.map(date => this.paydayCell(date)).join('')}</div>`;
 
     const orderedSpaces = [...this.state.spaces].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
     const rows = orderedSpaces.map(space => {
@@ -47,8 +67,9 @@ export class ScheduleView {
     }).join('');
 
     const roomRow = `<div class="schedule-row meeting-room-row"><div class="space-name"><small>BOOKABLE</small><strong>Meeting room</strong></div>${this.state.week.map(date => `<button class="room-week-cell ${date === this.state.today ? 'today' : ''} ${date === this.state.selectedDate ? 'selected' : ''}" data-room-day="${date}" aria-label="Meeting room ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}">${this.roomWeekBar(date)}</button>`).join('')}</div>`;
-    this.container.innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking / room</div>${head}</div>${rows}${roomRow}</div>`;
+    this.container.innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking / room</div>${head}</div>${paydayRow}${rows}${roomRow}</div>`;
     this.container.querySelectorAll('.day-head[data-date]').forEach(el => el.addEventListener('click', () => this.selectDate(el.dataset.date)));
+    this.container.querySelectorAll('[data-payday-date]').forEach(el => el.addEventListener('click', () => this.openPaydayVotes(el.dataset.paydayDate)));
     this.container.querySelectorAll('[data-space-id]').forEach(el => el.addEventListener('click', () => this.openPicker(el.dataset.spaceId, el.dataset.date)));
     this.container.querySelectorAll('[data-room-day]').forEach(el => el.addEventListener('click', () => this.openRoomDetails(null, el.dataset.roomDay)));
   }

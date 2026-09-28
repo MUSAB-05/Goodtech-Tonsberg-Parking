@@ -22,6 +22,8 @@ let lastFingerprint = '';
 let installPrompt = null;
 let lastConnectionError = '';
 const PENDING_KEY = 'gt-parking-pending-v1';
+const PAYDAY_SLOT_ID = 'payday-drinks';
+const PAYDAY_THRESHOLD = 3;
 let pendingWrites = loadPendingWrites();
 let pendingFlushInFlight = false;
 
@@ -44,7 +46,8 @@ const roomView = new MeetingRoomView($('#meeting-room'), {
 
 const scheduleView = new ScheduleView($('#schedule'), {
   state, dayBookings, duplicatesFor, openPicker, selectDate,
-  openRoomDetails: (key, date) => roomController.openDetails(key, date)
+  openRoomDetails: (key, date) => roomController.openDetails(key, date),
+  openPaydayVotes
 });
 
 function osloNow() {
@@ -68,7 +71,7 @@ function visibleMonths() { return [...new Set(state.week.map(monthKey))]; }
 
 function parkingKeyParts(key) {
   const match = /^(\d{4}-\d{2}-\d{2})__(.+)$/.exec(String(key || ''));
-  if (!match || match[2].startsWith('meeting-room__')) return null;
+  if (!match || match[2].startsWith('meeting-room__') || match[2] === PAYDAY_SLOT_ID) return null;
   return { date: match[1], spaceId: match[2] };
 }
 
@@ -212,9 +215,108 @@ function render() {
   $('#selected-date-title').textContent = formatDate(state.selectedDate, { weekday:'long', day:'numeric', month:'long' });
   $('#week-label').textContent = `Week ${String(isoWeek(state.week[0])).padStart(2,'0')} · ${isoWeekYear(state.week[0])}`;
   renderSummary(bookings);
+  renderPaydayMobile();
   scheduleView.render();
   map.render(state.groups, bookings, state.selectedDate, state.drivers, duplicates);
   roomView.render(state.bookings, state.selectedDate, state.drivers);
+}
+
+function paydayKey(date) { return bookingKey(date, PAYDAY_SLOT_ID); }
+
+function paydayVoteIds(date, source = state.bookings) {
+  const value = source?.[paydayKey(date)];
+  const valid = new Set(state.drivers.filter(driver => driver.id !== 'guest').map(driver => driver.id));
+  return [...new Set(Array.isArray(value?.voterIds) ? value.voterIds.filter(id => valid.has(id)) : [])];
+}
+
+function paydayStatus(date) {
+  const voterIds = paydayVoteIds(date);
+  return { voterIds, count: voterIds.length, confirmed: voterIds.length >= PAYDAY_THRESHOLD };
+}
+
+function renderPaydayMobile() {
+  const container = $('#payday-mobile');
+  if (!container || !state.week.length) return;
+  const days = state.week.map(date => {
+    const status = paydayStatus(date);
+    const day = formatDate(date, { weekday:'short' });
+    const dateLabel = formatDate(date, { day:'numeric', month:'short' });
+    const value = status.confirmed ? '🍻 17:00' : status.count ? `${status.count}/${PAYDAY_THRESHOLD}` : 'Stem';
+    return `<button type="button" class="payday-mobile-day ${status.confirmed ? 'confirmed' : ''} ${date === state.today ? 'today' : ''}" data-payday-mobile-date="${date}"><span>${esc(day)}</span><b>${esc(dateLabel)}</b><strong>${value}</strong></button>`;
+  }).join('');
+  container.innerHTML = `<div class="payday-mobile-head"><div><small>SOCIAL</small><strong>🍻 Lønningspils</strong></div><span>3 personer → 17:00</span></div><div class="payday-mobile-days">${days}</div>`;
+  container.querySelectorAll('[data-payday-mobile-date]').forEach(button => button.addEventListener('click', () => openPaydayVotes(button.dataset.paydayMobileDate)));
+}
+
+function openPaydayVotes(date) {
+  state.selectedPaydayDate = date;
+  renderPaydayDialog();
+  const dialog = $('#payday-dialog');
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+function renderPaydayDialog() {
+  const date = state.selectedPaydayDate;
+  const content = $('#payday-dialog-content');
+  if (!date || !content) return;
+  const status = paydayStatus(date);
+  const selected = new Set(status.voterIds);
+  const drivers = state.drivers.filter(driver => driver.id !== 'guest');
+  const headline = status.confirmed
+    ? '🍻 Lønningspils er bekreftet kl. 17:00'
+    : `${status.count}/${PAYDAY_THRESHOLD} kan · trenger ${PAYDAY_THRESHOLD - status.count} til`;
+  content.innerHTML = `<div class="payday-dialog-inner">
+    <div class="picker-head">
+      <div><p class="eyebrow">LØNNINGSPILS</p><h2>${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}</h2></div>
+      <button class="icon-button" type="button" data-payday-close aria-label="Close">×</button>
+    </div>
+    <p class="payday-dialog-status ${status.confirmed ? 'confirmed' : ''}">${esc(headline)}</p>
+    <p class="payday-dialog-help">Trykk på navnet ditt for å melde at du kan denne dagen. Ved 3 eller flere blir dagen automatisk satt til kl. 17:00.</p>
+    <div class="driver-list payday-voter-list">${drivers.map(driver => {
+      const canJoin = selected.has(driver.id);
+      return `<button type="button" class="driver-option payday-voter ${canJoin ? 'selected' : ''}" data-payday-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${canJoin ? '✓ Kan' : 'Trykk for å stemme'}</small></span></button>`;
+    }).join('')}</div>
+  </div>`;
+  content.querySelector('[data-payday-close]')?.addEventListener('click', () => $('#payday-dialog')?.close());
+  content.querySelectorAll('[data-payday-driver-id]').forEach(button => button.addEventListener('click', () => togglePaydayVote(button.dataset.paydayDriverId)));
+}
+
+async function togglePaydayVote(driverId) {
+  const date = state.selectedPaydayDate;
+  if (!date || !driverId || driverId === 'guest') return;
+  const key = paydayKey(date);
+  const localIds = paydayVoteIds(date);
+  const shouldJoin = !localIds.includes(driverId);
+  mutationsInFlight++;
+  try {
+    let source = state.bookings;
+    try { source = await backend.getBookings([monthKey(date)]); } catch {}
+    const ids = paydayVoteIds(date, source).filter(id => id !== driverId);
+    if (shouldJoin) ids.push(driverId);
+    const voterIds = [...new Set(ids)];
+    const value = voterIds.length ? {
+      kind: PAYDAY_SLOT_ID,
+      voterIds,
+      confirmed: voterIds.length >= PAYDAY_THRESHOLD,
+      startHour: 17,
+      updatedAt: new Date().toISOString()
+    } : null;
+    await backend.setBooking(key, value);
+    if (value) state.bookings[key] = value; else delete state.bookings[key];
+    render();
+    renderPaydayDialog();
+    if (value?.confirmed) toast('🍻 Lønningspils bekreftet kl. 17:00');
+    else toast(shouldJoin ? 'Stemmen din er lagt til' : 'Stemmen din er fjernet');
+    setConnection('Live', 'live', 'Shared bookings are synchronized.');
+  } catch (error) {
+    console.error(error);
+    setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
+    toast('Kunne ikke lagre lønningspils-stemmen. Prøv igjen.');
+  } finally {
+    mutationsInFlight--;
+    await reloadBookings(true);
+    if ($('#payday-dialog')?.open) renderPaydayDialog();
+  }
 }
 
 function renderSummary(bookings) {
@@ -271,9 +373,7 @@ function renderDrivers() {
     .filter(driver => driver.name.toLocaleLowerCase().includes(query))
     .sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.sortOrder - b.sortOrder);
   $('#driver-list').innerHTML = filtered.length ? filtered.map(driver => {
-    const count = counts.get(driver.id) || 0;
-    const hint = count ? `${count} previous booking${count === 1 ? '' : 's'} here` : 'Assign immediately';
-    return `<button type="button" class="driver-option" data-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong><small>${esc(hint)}</small></span></button>`;
+    return `<button type="button" class="driver-option" data-driver-id="${esc(driver.id)}"><span class="avatar">${esc(driver.name.slice(0,1).toUpperCase())}</span><span><strong>${esc(driver.name)}</strong></span></button>`;
   }).join('') : '<p class="empty-state">No employees found</p>';
   $('#driver-list').querySelectorAll('[data-driver-id]').forEach(element => element.addEventListener('click', () => saveParkingBooking(element.dataset.driverId)));
 }
