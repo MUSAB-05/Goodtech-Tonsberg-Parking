@@ -14,7 +14,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;'
 
 const state = {
   groups: [], meetingRoom: null, drivers: [], spaces: [], bookings: {}, week: [], selectedDate: '', today: '', selectedSpace: null,
-  spaceFrequency: {}
+  spaceFrequency: {}, paydayEvents: {}
 };
 let refreshInFlight = false;
 let mutationsInFlight = 0;
@@ -26,6 +26,7 @@ const PAYDAY_SLOT_ID = 'payday-drinks';
 const PAYDAY_THRESHOLD = 4;
 let pendingWrites = loadPendingWrites();
 let pendingFlushInFlight = false;
+let lastPaydayEventsRefresh = 0;
 
 const backend = new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
@@ -57,6 +58,106 @@ function osloNow() {
   const get = type => parts.find(part => part.type === type)?.value;
   const date = `${get('year')}-${get('month')}-${get('day')}`;
   return { date, weekday: new Date(`${date}T12:00:00Z`).getUTCDay() };
+}
+
+function dateIso(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;
+}
+
+function daysUntil(fromDate, toDate) {
+  return Math.round((Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${fromDate}T00:00:00Z`)) / 86400000);
+}
+
+function easterDate(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+function isoWeekFriday(year, week = 27) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Weekday = jan4.getUTCDay() || 7;
+  const friday = new Date(jan4);
+  friday.setUTCDate(jan4.getUTCDate() - jan4Weekday + 1 + ((week - 1) * 7) + 4);
+  return dateIso(friday);
+}
+
+function holidayCandidates(today) {
+  const year = Number(String(today).slice(0, 4));
+  const events = [];
+  for (const y of [year, year + 1]) {
+    events.push(
+      { name:'17 May', icon:'🇳🇴', date:`${y}-05-17` },
+      { name:'Summer break', icon:'☀️', date:isoWeekFriday(y, 27) },
+      { name:'Halloween', icon:'🎃', date:`${y}-10-31` },
+      { name:'Christmas', icon:'🎄', date:`${y}-12-24` },
+      { name:'Easter', icon:'🐣', date:easterDate(y) }
+    );
+  }
+  return events.filter(event => event.date >= today).sort((a,b) => a.date.localeCompare(b.date));
+}
+
+function confirmedPaydayDates() {
+  const combined = { ...(state.paydayEvents || {}) };
+  for (const [key, value] of Object.entries(state.bookings || {})) {
+    const match = /^(\d{4}-\d{2}-\d{2})__payday-drinks$/.exec(key);
+    if (!match) continue;
+    if (value?.confirmed || (Array.isArray(value?.voterIds) && value.voterIds.length >= PAYDAY_THRESHOLD)) {
+      combined[match[1]] = { confirmed:true, startHour:17 };
+    } else {
+      delete combined[match[1]];
+    }
+  }
+  return Object.entries(combined)
+    .filter(([date, value]) => date >= state.today && value?.confirmed)
+    .map(([date]) => date)
+    .sort();
+}
+
+function renderEventCountdown() {
+  const element = $('#event-countdown');
+  if (!element || !state.today) return;
+
+  const payday = confirmedPaydayDates()[0];
+  const event = payday
+    ? { name:'Lønningspils', icon:'🍻', date:payday }
+    : holidayCandidates(state.today)[0];
+
+  if (!event) {
+    element.textContent = '';
+    element.hidden = true;
+    return;
+  }
+
+  const days = daysUntil(state.today, event.date);
+  const countdown = days === 0 ? 'Today' : days === 1 ? '1 day' : `${days} days`;
+  element.hidden = false;
+  element.textContent = `${event.icon} ${event.name} · ${countdown}`;
+  element.title = `${event.name} · ${formatPaydayDate(event.date)}`;
+}
+
+async function refreshPaydayEvents(force = false) {
+  if (!state.today) return;
+  if (!force && Date.now() - lastPaydayEventsRefresh < 60000) return;
+  try {
+    state.paydayEvents = await backend.getPaydayEvents();
+    lastPaydayEventsRefresh = Date.now();
+    renderEventCountdown();
+  } catch (error) {
+    console.warn('Could not refresh Lønningspils countdown', error);
+  }
 }
 
 function fingerprint(bookings) {
@@ -215,6 +316,7 @@ function render() {
   $('#selected-date-title').textContent = formatDate(state.selectedDate, { weekday:'long', day:'numeric', month:'long' });
   $('#week-label').textContent = `Week ${String(isoWeek(state.week[0])).padStart(2,'0')} · ${isoWeekYear(state.week[0])}`;
   renderSummary(bookings);
+  renderEventCountdown();
   renderPaydayMobile();
   scheduleView.render();
   map.render(state.groups, bookings, state.selectedDate, state.drivers, duplicates);
@@ -311,6 +413,13 @@ async function togglePaydayVote(driverId) {
     } : null;
     await backend.setBooking(key, value);
     if (value) state.bookings[key] = value; else delete state.bookings[key];
+    try {
+      const summary = value?.confirmed ? { confirmed:true, startHour:17, updatedAt:value.updatedAt } : null;
+      await backend.setPaydayEvent(date, summary);
+      if (summary) state.paydayEvents[date] = summary; else delete state.paydayEvents[date];
+    } catch (summaryError) {
+      console.warn('Could not update Lønningspils countdown', summaryError);
+    }
     render();
     renderPaydayDialog();
     if (value?.confirmed) toast('🍻 Lønningspils confirmed · 17:00');
@@ -474,6 +583,7 @@ async function reloadBookings(force = false) {
       lastFingerprint = nextFingerprint;
       render();
     }
+    await refreshPaydayEvents(force);
     const pendingCount = Object.keys(pendingWrites).length;
     if (pendingCount) {
       setConnection(`Sync pending (${pendingCount})`, 'pending', `${syncError?.message || 'Shared storage unavailable.'} ${pendingCount} local change${pendingCount === 1 ? '' : 's'} queued for retry.`);
@@ -532,6 +642,7 @@ async function init() {
     state.week = weekDates(monday);
     state.selectedDate = now.date;
     render();
+    await refreshPaydayEvents(true);
     await reloadBookings(true);
   } catch (error) {
     console.error(error);

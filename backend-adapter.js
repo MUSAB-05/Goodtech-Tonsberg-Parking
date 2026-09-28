@@ -15,6 +15,7 @@ export class ParkingBackend {
   }
 
   frequencyPath(spaceId) { return `frequency/${encodeURIComponent(String(spaceId || ''))}`; }
+  paydayEventsPath() { return 'social/payday-events'; }
   url(path) { return `${this.baseUrl}/${encodeURIComponent(this.namespace)}/${path}`; }
 
   async request(path, { method = 'GET', body } = {}) {
@@ -138,6 +139,21 @@ export class ParkingBackend {
       grouped.get(month)[key] = value ?? null;
     }
     for (const [month, monthChanges] of grouped) await this.patchMonth(month, monthChanges);
+  }
+
+  async getPaydayEvents() {
+    try {
+      const result = await this.request(this.paydayEventsPath());
+      return result && typeof result === 'object' && !Array.isArray(result) ? result : {};
+    } catch (error) {
+      if (error.status === 404) return {};
+      throw error;
+    }
+  }
+
+  async setPaydayEvent(date, value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return;
+    await this.patchPath(this.paydayEventsPath(), { [date]: value ?? null });
   }
 
   async getSpaceFrequency(spaceId) {

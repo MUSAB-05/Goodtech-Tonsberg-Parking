@@ -121,3 +121,21 @@ test('payday dialog has compact dedicated layout and simple English copy', async
   assert.match(css,/\.payday-voter-list\{grid-template-columns:repeat\(2/);
   assert.match(css,/@media\(max-width:620px\)[\s\S]*?\.payday-voter-list\{grid-template-columns:1fr/);
 });
+
+
+test('top bar counts down to confirmed lønningspils before seasonal events', async()=>{
+  const [html,app,backend,css]=await Promise.all([read('index.html'),read('app.js'),read('backend-adapter.js'),readCss()]);
+  assert.match(html,/id="event-countdown"/);
+  assert.match(app,/confirmedPaydayDates/);
+  assert.match(app,/name:'Lønningspils'/);
+  assert.match(app,/name:'Halloween'/);
+  assert.match(app,/name:'Christmas'/);
+  assert.match(app,/name:'Easter'/);
+  assert.match(app,/name:'17 May'/);
+  assert.match(app,/name:'Summer break'/);
+  assert.match(app,/isoWeekFriday\(y, 27\)/);
+  assert.match(app,/easterDate\(y\)/);
+  assert.match(backend,/getPaydayEvents/);
+  assert.match(backend,/setPaydayEvent/);
+  assert.match(css,/\.event-countdown/);
+});
