@@ -1,8 +1,10 @@
 import { APP_CONFIG } from './config.js';
 import { ParkingBackend } from './backend-adapter.js';
+import { D1Backend } from './d1-backend.js';
 
 const PENDING_KEY = 'gt-parking-pending-v1';
-const backend = new ParkingBackend({
+const isD1 = APP_CONFIG.storageProvider === 'd1';
+const backend = isD1 ? new D1Backend(APP_CONFIG.d1) : new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
   namespace: APP_CONFIG.mantleNamespace,
   key: APP_CONFIG.mantleKey,
@@ -77,13 +79,13 @@ function ensureDialog() {
 }
 
 async function testDomainReachability(lines) {
-  const origin = String(APP_CONFIG.mantleBaseUrl || 'https://mantledb.sh/v2').replace(/\/v2\/?$/, '');
+  const origin = isD1 ? APP_CONFIG.d1.apiUrl : String(APP_CONFIG.mantleBaseUrl || 'https://the storage service/v2').replace(/\/v2\/?$/, '');
   try {
     await fetch(`${origin}/?gt-parking-probe=${Date.now()}`, { mode: 'no-cors', cache: 'no-store' });
-    lines.push('1. Mantle domain reachability: PASS');
+    lines.push('1. Storage API reachability: PASS');
     return true;
   } catch (error) {
-    lines.push(`1. Mantle domain reachability: FAIL — ${describeError(error)}`);
+    lines.push(`1. Storage API reachability: FAIL — ${describeError(error)}`);
     return false;
   }
 }
@@ -91,7 +93,7 @@ async function testDomainReachability(lines) {
 async function testAuthenticatedApi(lines) {
   try {
     const ok = await backend.healthCheck();
-    lines.push(`2. Authenticated Mantle API: ${ok ? 'PASS' : 'FAIL — unexpected health result'}`);
+    lines.push(`2. Authenticated storage API: ${ok ? 'PASS' : 'FAIL — unexpected health result'}`);
     return Boolean(ok);
   } catch (error) {
     lines.push(`2. Authenticated Mantle API: FAIL — ${describeError(error)}`);
@@ -150,7 +152,7 @@ function recommendation(domainOk, apiOk, result, lines) {
   if (!domainOk) {
     lines.push('');
     lines.push('Conclusion: this device/network cannot reach mantledb.sh. This is a network/DNS/filtering problem, not a booking-data problem.');
-    return 'MantleDB is blocked or unreachable from this device/network.';
+    return 'Storage API is blocked or unreachable from this device/network.';
   }
   if (!apiOk) {
     lines.push('');
@@ -182,7 +184,8 @@ async function runDiagnostics(showDialog = true) {
     `Time: ${new Date().toISOString()}`,
     `Page: ${location.href}`,
     `Online flag: ${navigator.onLine}`,
-    `Namespace: ${APP_CONFIG.mantleNamespace}`,
+    `Provider: ${isD1 ? 'Cloudflare D1' : 'MantleDB'}`,
+    `Namespace: ${isD1 ? 'gt-parking' : APP_CONFIG.mantleNamespace}`,
     `Pending at start: ${Object.keys(readPending()).length}`,
     ''
   ];
