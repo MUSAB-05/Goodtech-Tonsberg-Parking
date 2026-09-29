@@ -1,5 +1,6 @@
 import { APP_CONFIG } from './config.js';
 import { ParkingBackend } from './backend-adapter.js';
+import { D1Backend } from './d1-backend.js';
 import { ParkingMap } from './parking-map.js';
 import { MeetingRoomView } from './meeting-room.js';
 import { RoomDialogController } from './room-dialog-controller.js';
@@ -63,11 +64,17 @@ function saveSnapshot() {
 }
 
 
-const backend = new ParkingBackend({
-  baseUrl: APP_CONFIG.mantleBaseUrl,
-  namespace: APP_CONFIG.mantleNamespace,
-  key: APP_CONFIG.mantleKey
-});
+if (APP_CONFIG.storageProvider === 'd1') {
+  rateLimitUntil = 0;
+  localStorage.removeItem('gt-parking-rate-limit-until');
+}
+const backend = APP_CONFIG.storageProvider === 'd1'
+  ? new D1Backend(APP_CONFIG.d1)
+  : new ParkingBackend({
+      baseUrl: APP_CONFIG.mantleBaseUrl,
+      namespace: APP_CONFIG.mantleNamespace,
+      key: APP_CONFIG.mantleKey
+    });
 
 const map = new ParkingMap($('#parking-map'), {
   onSelect: openPicker,
