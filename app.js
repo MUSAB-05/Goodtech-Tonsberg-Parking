@@ -189,7 +189,7 @@ async function refreshPaydayEvents(force = false) {
   try {
     state.paydayEvents = await backend.getPaydayEvents();
     lastPaydayEventsRefresh = Date.now();
-    saveSnapshot();
+    if (hasSnapshot) saveSnapshot();
     renderEventCountdown();
   } catch (error) {
     noteRateLimit(error);
@@ -230,7 +230,7 @@ function closeDialogSafe(dialog) {
 async function refreshGreenDeeds() {
   try {
     state.greenDeeds = await backend.getGreenDeeds();
-    saveSnapshot();
+    if (hasSnapshot) saveSnapshot();
     renderGreenDeeds();
   } catch (error) {
     noteRateLimit(error);
