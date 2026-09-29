@@ -8,7 +8,7 @@ test('PWA files, Goodtech logo, install metadata and access gate are present', a
   const [html,manifest,sw,gate]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js'),read('access-gate.js')]);
   assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/); assert.match(html,/id="access-gate"/); assert.match(html,/access-gate\.js/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v11-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/access-gate\.js/); assert.match(sw,/styles\/access\.css/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v\d+-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/access-gate\.js/); assert.match(sw,/styles\/access\.css/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
   assert.match(gate,/EXPECTED_HASH/); assert.match(gate,/sessionStorage/); assert.match(gate,/import\('\.\/app\.js'\)/); assert.doesNotMatch(gate,/['"]3111['"]/);
 });
 

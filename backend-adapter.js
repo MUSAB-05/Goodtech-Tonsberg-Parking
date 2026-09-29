@@ -1,3 +1,5 @@
+import { recordMantleRequest } from './usage-meter.js';
+
 export class ParkingBackend {
   constructor({ baseUrl, namespace, key = '', fetchImpl = fetch, timeoutMs = 8000 }) {
     this.baseUrl = String(baseUrl || 'https://mantledb.sh/v2').replace(/\/$/, '');
@@ -22,6 +24,7 @@ export class ParkingBackend {
   async request(path, { method = 'GET', body } = {}) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
+    let requestStatus = 0;
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (this.key) headers['X-Mantle-Key'] = this.key;
@@ -31,6 +34,7 @@ export class ParkingBackend {
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller?.signal
       });
+      requestStatus = response.status;
       const text = await response.text();
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -48,6 +52,7 @@ export class ParkingBackend {
       wrapped.cause = error;
       throw wrapped;
     } finally {
+      recordMantleRequest(requestStatus);
       if (timer) clearTimeout(timer);
     }
   }
@@ -188,10 +193,12 @@ export class ParkingBackend {
   }
 
   async healthCheck() {
-    const path = `health/${Date.now()}`;
-    await this.request(path, { method: 'POST', body: { ok: true } });
-    const read = await this.request(path);
-    await this.request(path, { method: 'DELETE' });
-    return read?.ok === true;
+    try {
+      await this.request(this.paydayEventsPath());
+      return true;
+    } catch (error) {
+      if (error.status === 404) return true;
+      throw error;
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { APP_CONFIG } from './config.js';
 import { ParkingBackend } from './backend-adapter.js';
+import { localMantleUsage } from './usage-meter.js';
 
 const PENDING_KEY = 'gt-parking-pending-v1';
 const backend = new ParkingBackend({
@@ -11,6 +12,22 @@ const backend = new ParkingBackend({
 
 let lastReport = 'Diagnostics have not been run yet.';
 let running = false;
+
+function usageLines() {
+  const usage = localMantleUsage();
+  return [
+    `This browser, last 24 hours: ${usage.attempts} Mantle attempts (${usage.responses} HTTP responses, ${usage.rateLimited} rate limited, ${usage.networkFailures} network failures).`,
+    'This excludes other devices and browsers. Mantle does not provide an exact namespace-wide usage meter. Free limit: 10,000 requests per 24 hours.'
+  ];
+}
+
+function openDiagnostics() {
+  const dialog = ensureDialog();
+  lastReport = usageLines().join('\n');
+  dialog.querySelector('#diagnostics-summary').textContent = 'Local request count · no network check run';
+  dialog.querySelector('#diagnostics-output').textContent = lastReport;
+  if (!dialog.open) dialog.showModal();
+}
 
 function pendingValue(entry) {
   if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value ?? null;
@@ -54,7 +71,7 @@ function ensureDialog() {
         <div><p class="eyebrow">SYNC DIAGNOSTICS</p><h2>Shared storage check</h2></div>
         <button class="icon-button diagnostics-close" type="button" aria-label="Close">×</button>
       </div>
-      <p class="diagnostics-help">This checks the connection from this exact browser. Your queued bookings are preserved.</p>
+      <p class="diagnostics-help">This checks the connection from this browser. Your queued bookings are preserved.</p>
       <div id="diagnostics-summary" class="diagnostics-summary">Ready to test.</div>
       <pre id="diagnostics-output" class="diagnostics-output"></pre>
       <div class="diagnostics-actions">
@@ -192,6 +209,8 @@ async function runDiagnostics(showDialog = true) {
     const apiOk = domainOk ? await testAuthenticatedApi(lines) : false;
     const result = apiOk ? await reconcilePending(lines, true) : { after: Object.keys(readPending()).length };
     const message = recommendation(domainOk, apiOk, result, lines);
+    lines.push('');
+    lines.push(...usageLines());
     lastReport = lines.join('\n');
     output.textContent = lastReport;
     summary.textContent = message;
@@ -222,11 +241,11 @@ function attach() {
   connection.setAttribute('role', 'button');
   connection.setAttribute('tabindex', '0');
   connection.setAttribute('aria-label', 'Open shared storage diagnostics');
-  connection.addEventListener('click', () => runDiagnostics(true));
+  connection.addEventListener('click', openDiagnostics);
   connection.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      runDiagnostics(true);
+      openDiagnostics();
     }
   });
 }

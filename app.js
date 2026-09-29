@@ -27,6 +27,28 @@ const PAYDAY_THRESHOLD = 4;
 let pendingWrites = loadPendingWrites();
 let pendingFlushInFlight = false;
 let lastPaydayEventsRefresh = 0;
+let lastGreenDeedsRefresh = 0;
+let lastBookingsRefresh = 0;
+let lastBookingsAttempt = 0;
+const SOCIAL_REFRESH_MS = 2 * 60 * 60 * 1000;
+const IDLE_MS = 60 * 1000;
+const FAST_POLL_MS = 20 * 1000;
+const FAST_KEY = 'gt-parking-fast-start-v1';
+let lastActivityAt = Date.now();
+let lastFastPoll = Date.now();
+let fastUntil = 0;
+let idle = false;
+let waking = false;
+let beforeIdle = null;
+try {
+  const now = Date.now();
+  const lastFastStart = Number(sessionStorage.getItem(FAST_KEY) || 0);
+  if (now - lastFastStart < IDLE_MS) fastUntil = lastFastStart + IDLE_MS;
+  else if (now - lastFastStart >= 24 * 60 * 60 * 1000) {
+    fastUntil = now + IDLE_MS;
+    sessionStorage.setItem(FAST_KEY, String(now));
+  }
+} catch { fastUntil = Date.now() + IDLE_MS; }
 const SNAPSHOT_KEY = 'gt-parking-last-known-v1';
 const RATE_LIMIT_PAUSE_MS = 30 * 60 * 1000;
 let rateLimitUntil = Number(localStorage.getItem('gt-parking-rate-limit-until') || 0) || 0;
@@ -185,7 +207,7 @@ function renderEventCountdown() {
 
 async function refreshPaydayEvents(force = false) {
   if (!state.today) return;
-  if (!force && Date.now() - lastPaydayEventsRefresh < 60000) return;
+  if (Date.now() - lastPaydayEventsRefresh < SOCIAL_REFRESH_MS) return;
   try {
     state.paydayEvents = await backend.getPaydayEvents();
     lastPaydayEventsRefresh = Date.now();
@@ -228,8 +250,10 @@ function closeDialogSafe(dialog) {
 }
 
 async function refreshGreenDeeds() {
+  if (Date.now() - lastGreenDeedsRefresh < SOCIAL_REFRESH_MS) return;
   try {
     state.greenDeeds = await backend.getGreenDeeds();
+    lastGreenDeedsRefresh = Date.now();
     if (hasSnapshot) saveSnapshot();
     renderGreenDeeds();
   } catch (error) {
@@ -663,6 +687,7 @@ async function reloadBookings(force = false) {
     return;
   }
   refreshInFlight = true;
+  lastBookingsAttempt = Date.now();
   let syncError = null;
   try {
     if (Object.keys(pendingWrites).length) {
@@ -674,6 +699,7 @@ async function reloadBookings(force = false) {
     let gotRemote = false;
     try {
       const remote = await backend.getBookings(months);
+      lastBookingsRefresh = Date.now();
       nextBase = mergeVisibleMonths(state.bookings, remote, months);
       gotRemote = true;
     } catch (error) {
@@ -689,7 +715,7 @@ async function reloadBookings(force = false) {
       render();
     }
     if (Date.now() >= rateLimitUntil) await refreshPaydayEvents(force);
-    if (force && Date.now() >= rateLimitUntil) await refreshGreenDeeds();
+    if (Date.now() >= rateLimitUntil) await refreshGreenDeeds();
     const pendingCount = Object.keys(pendingWrites).length;
     if (pendingCount) {
       setConnection(`Sync pending (${pendingCount})`, 'pending', `${syncError?.message || 'Shared storage unavailable.'} ${pendingCount} local change${pendingCount === 1 ? '' : 's'} queued for retry.`);
@@ -796,10 +822,8 @@ $('#green-deeds-dialog')?.addEventListener('click', event => {
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    if (lastConnectionError) setConnection('Reconnecting…', 'checking', lastConnectionError);
-    reloadBookings(true);
-  }
+  if (document.visibilityState === 'hidden') markIdle();
+  else wakeFromIdle();
 });
 window.addEventListener('online', () => { setConnection('Reconnecting…', 'checking', 'Internet connection restored; checking shared storage.'); reloadBookings(true); });
 window.addEventListener('offline', () => setConnection('Offline', 'offline', 'This device is offline.'));
@@ -881,5 +905,65 @@ if ('serviceWorker' in navigator) {
     .catch(console.error);
 }
 applyTheme(localStorage.getItem('gt-parking-theme') || 'dark');
-setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(1000, Number(APP_CONFIG.pollMs || 1500)));
+function markIdle() {
+  if (idle || refreshInFlight || mutationsInFlight) return;
+  idle = true;
+  const badge = $('#connection');
+  beforeIdle = { text: badge.textContent, className: badge.className, title: badge.title };
+  badge.textContent = 'Idle · tap to refresh';
+  badge.className = 'connection idle';
+  badge.title = 'Polling is paused. Activity resumes the page; old bookings refresh first.';
+}
+
+async function wakeFromIdle() {
+  lastActivityAt = Date.now();
+  if (!idle) return;
+  idle = false;
+  const badge = $('#connection');
+  const recentAttempt = Date.now() - lastBookingsAttempt < APP_CONFIG.pollMs;
+  const recentData = Date.now() - lastBookingsRefresh < APP_CONFIG.pollMs;
+  if (recentData || recentAttempt) {
+    if (beforeIdle) {
+      badge.textContent = beforeIdle.text;
+      badge.className = beforeIdle.className;
+      badge.title = beforeIdle.title;
+    }
+    return;
+  }
+  waking = true;
+  setConnection('Refreshing…', 'checking', 'Checking shared bookings before allowing changes.');
+  try { await reloadBookings(true); }
+  finally { waking = false; }
+}
+
+for (const type of ['pointermove', 'pointerdown', 'touchstart', 'scroll']) {
+  document.addEventListener(type, () => {
+    if (idle && document.visibilityState === 'visible') wakeFromIdle();
+    else lastActivityAt = Date.now();
+  }, { passive: true });
+}
+document.addEventListener('keydown', event => {
+  if (idle && document.visibilityState === 'visible') wakeFromIdle();
+  else lastActivityAt = Date.now();
+  if (waking) { event.preventDefault(); event.stopImmediatePropagation(); }
+}, true);
+document.addEventListener('click', event => {
+  if (!waking) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  toast('Refreshing bookings · select again in a moment');
+}, true);
+
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  if (!idle && now - lastActivityAt >= IDLE_MS) markIdle();
+  if (idle || waking) return;
+  if (now < fastUntil) {
+    if (now - lastFastPoll >= FAST_POLL_MS) {
+      lastFastPoll = now;
+      reloadBookings(false);
+    }
+  } else if (now - lastBookingsAttempt >= APP_CONFIG.pollMs) reloadBookings(false);
+}, 5000);
 init();
