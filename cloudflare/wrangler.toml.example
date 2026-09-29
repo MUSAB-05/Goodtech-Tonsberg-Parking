@@ -1,0 +1,10 @@
+name = "gt-parking-api"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gt-parking"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Set ACCESS_CODE_HASH with `npx wrangler secret put ACCESS_CODE_HASH`.
