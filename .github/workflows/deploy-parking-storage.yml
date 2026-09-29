@@ -1,0 +1,51 @@
+name: Deploy parking storage API
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: cloudflare-d1-migration
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify storage logic
+        run: node --test tests/d1-worker.test.mjs
+      - name: Install Wrangler
+        run: npm install --no-save --prefix cloudflare wrangler@4
+      - name: Configure database binding
+        working-directory: cloudflare
+        run: |
+          cp wrangler.toml.example wrangler.toml
+          sed -i 's/REPLACE_WITH_YOUR_D1_DATABASE_ID/6f1a86af-e7d1-4510-90f5-29443b5484a7/' wrangler.toml
+      - name: Create schema and deploy Worker
+        working-directory: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler d1 execute gt-parking --remote --file=./schema.sql
+          npx wrangler deploy
+      - name: Set existing employee code hash
+        working-directory: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node - <<'NODE' | npx wrangler secret put ACCESS_CODE_HASH
+          const fs = require('node:fs');
+          const source = fs.readFileSync('../access-gate.js', 'utf8');
+          const match = source.match(/EXPECTED_HASH = '([0-9a-f]{64})'/);
+          if (!match) throw new Error('Access code hash not found');
+          process.stdout.write(match[1]);
+          NODE
