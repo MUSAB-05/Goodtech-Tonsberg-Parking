@@ -2,11 +2,6 @@ name: Deploy parking storage API
 
 on:
   workflow_dispatch:
-    inputs:
-      cloudflare_account_id:
-        description: 'Cloudflare account ID (not the D1 database ID)'
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -35,7 +30,7 @@ jobs:
         working-directory: cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare_account_id }}
+          CLOUDFLARE_ACCOUNT_ID: 547503385b7d7967e1270c8cfc97512d
         run: |
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
@@ -45,7 +40,7 @@ jobs:
         working-directory: cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare_account_id }}
+          CLOUDFLARE_ACCOUNT_ID: 547503385b7d7967e1270c8cfc97512d
         run: |
           node - <<'NODE' | npx wrangler secret put ACCESS_CODE_HASH
           const fs = require('node:fs');
