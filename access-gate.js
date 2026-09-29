@@ -1,4 +1,5 @@
 const ACCESS_SESSION_KEY = 'gt-parking-access-v1';
+const ACCESS_CODE_KEY = 'gt-parking-access-code-v1';
 const EXPECTED_HASH = '6ef3867147c600f4b7ff7b2e00d0468f6e3b33a1aa2b834bfacbe5bec47e1828';
 
 const gate = document.querySelector('#access-gate');
@@ -22,15 +23,20 @@ async function startApp() {
   ]);
 }
 
-function openBoard() {
+function openBoard(code) {
+  if (code) sessionStorage.setItem(ACCESS_CODE_KEY, code);
   sessionStorage.setItem(ACCESS_SESSION_KEY, 'ok');
   document.body.classList.remove('access-locked');
   if (gate) gate.hidden = true;
   startApp().catch(console.error);
 }
 
-if (sessionStorage.getItem(ACCESS_SESSION_KEY) === 'ok') {
-  openBoard();
+const savedCode = sessionStorage.getItem(ACCESS_CODE_KEY);
+if (savedCode) {
+  digest(savedCode).then(hash => {
+    if (hash === EXPECTED_HASH) openBoard();
+    else requestAnimationFrame(() => input?.focus());
+  });
 } else {
   requestAnimationFrame(() => input?.focus());
 }
@@ -47,5 +53,6 @@ form?.addEventListener('submit', async event => {
     }
     return;
   }
-  openBoard();
+  openBoard(input.value);
+  input.value = '';
 });
