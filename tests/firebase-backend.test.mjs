@@ -34,3 +34,25 @@ test('old removal cannot erase another booking', async () => {
   await assert.rejects(fake.backend.clearBookingIfMatches('2026-09-29__P1', { driverId: 'alice' }), error => error.kind === 'stale');
   assert.equal(fake.value.driverId, 'bob');
 });
+
+test('month stream applies changes without downloading the month again', async () => {
+  const original = globalThis.EventSource;
+  const streams = [];
+  globalThis.EventSource = class {
+    constructor() { this.listeners = {}; streams.push(this); }
+    addEventListener(kind, callback) { this.listeners[kind] = callback; }
+    emit(kind, payload) { this.listeners[kind]({ data: JSON.stringify(payload) }); }
+    close() {}
+  };
+  try {
+    const fake = fakeBackend();
+    const updates = [];
+    const stop = await fake.backend.subscribeMonths(['2026-09'], (month, bookings) => updates.push({ month, bookings }));
+    streams[0].emit('put', { path: '/', data: { '2026-09-29__P1': { driverId: 'alice' } } });
+    streams[0].emit('patch', { path: '/', data: { '2026-09-29__P2': { driverId: 'bob' } } });
+    assert.equal(updates.at(-1).bookings['2026-09-29__P1'].driverId, 'alice');
+    assert.equal(updates.at(-1).bookings['2026-09-29__P2'].driverId, 'bob');
+    assert.equal(fake.calls.length, 0);
+    stop();
+  } finally { globalThis.EventSource = original; }
+});
