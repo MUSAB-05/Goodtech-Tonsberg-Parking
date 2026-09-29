@@ -97,6 +97,57 @@ export class FirebaseBackend {
     const docs = await Promise.all([...new Set(months || [])].map(m => this.request(this.monthPath(m))));
     return Object.assign({}, ...docs.map(doc => doc || {}));
   }
+  async subscribeMonths(months, onUpdate, onError = () => {}) {
+    const token = await this.authenticate();
+    const sources = [];
+    let closed = false;
+    const apply = (current, payload, patch) => {
+      const segments = String(payload.path || '/').split('/').filter(Boolean);
+      if (!segments.length && !patch) return payload.data || {};
+      const next = structuredClone(current || {});
+      let node = next;
+      for (const segment of segments.slice(0, -1)) node = node[segment] ||= {};
+      const final = segments.at(-1);
+      if (patch) {
+        const target = final ? (node[final] ||= {}) : node;
+        for (const [key, value] of Object.entries(payload.data || {})) {
+          if (value === null) delete target[key]; else target[key] = value;
+        }
+      } else if (payload.data === null) delete node[final];
+      else node[final] = payload.data;
+      return next;
+    };
+    for (const month of [...new Set(months || [])]) {
+      const path = this.monthPath(month);
+      const source = new EventSource(this.url(path, token));
+      sources.push(source);
+      let snapshot = {};
+      for (const kind of ['put', 'patch']) source.addEventListener(kind, event => {
+        try {
+          snapshot = apply(snapshot, JSON.parse(event.data), kind === 'patch');
+          onUpdate(month, snapshot);
+        } catch (error) { onError(error); }
+      });
+      source.addEventListener('cancel', () => { source.close(); onError(new Error('Firebase read access was cancelled.')); });
+      source.addEventListener('auth_revoked', () => { source.close(); onError(new Error('Firebase session expired.')); });
+      source.onerror = () => { if (!closed) onError(new Error('Firebase live connection interrupted.')); };
+    }
+    // Firebase ID tokens expire after an hour. Refresh the connection ahead of expiry.
+    const refresh = setTimeout(async () => {
+      if (closed) return;
+      sources.forEach(source => source.close());
+      this.session.expiresAt = 0;
+      try { replacement = await this.subscribeMonths(months, onUpdate, onError); }
+      catch (error) { onError(error); }
+    }, 50 * 60 * 1000);
+    let replacement = null;
+    return () => {
+      closed = true;
+      clearTimeout(refresh);
+      sources.forEach(source => source.close());
+      replacement?.();
+    };
+  }
   async patchMonth(month, changes) { await this.request(this.monthPath(month), { method: 'PATCH', body: changes }); }
   async setBooking(key, value) { await this.request(this.bookingPath(key), { method: 'PUT', body: value ?? null }); }
   async setBookings(changes) {
