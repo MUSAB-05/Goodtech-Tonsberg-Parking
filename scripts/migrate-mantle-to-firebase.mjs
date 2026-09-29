@@ -36,6 +36,8 @@ if (!paths.some(entry => entry.startsWith('bookings/'))) {
 }
 const source = {};
 for (const entry of paths) source[entry] = await mantleGet(`${base}/${namespace}/${entry.split('/').map(encodeURIComponent).join('/')}`);
+const sourceBytes = Buffer.byteLength(JSON.stringify(source));
+console.log(`Source data: ${(sourceBytes / 1024).toFixed(1)} KiB across ${paths.length} entries.`);
 
 const directory = path.resolve('backups');
 await fs.mkdir(directory, { recursive: true });
