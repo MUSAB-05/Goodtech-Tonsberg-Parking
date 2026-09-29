@@ -1,7 +1,7 @@
 export const APP_CONFIG = {
   appName: 'Goodtech Tønsberg Parking',
   timezone: 'Europe/Oslo',
-  pollMs: 300000,
+  pollMs: 600000,
   storageProvider: 'mantle', // Switch only after all records are copied and verified.
   d1: { apiUrl: '' },
   mantleBaseUrl: 'https://mantledb.sh/v2',
