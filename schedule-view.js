@@ -31,7 +31,9 @@ export class ScheduleView {
     const classes = ['schedule-cell','payday-cell',confirmed ? 'confirmed' : count ? 'interested' : '',date === this.state.today ? 'today' : '',selected ? 'selected' : ''].filter(Boolean).join(' ');
     const main = confirmed ? '🍻 17:00' : 'Vote';
     const note = confirmed ? 'Lønningspils!' : '';
-    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${confirmed ? 'bekreftet kl. 17:00' : 'åpen for valg'}"><span>${main}</span>${note ? `<small>${note}</small>` : ''}</button>`;
+    const voteLabel = count > 0 ? `, ${count} vote${count === 1 ? '' : 's'}` : '';
+    const badge = count > 0 ? `<i class="payday-vote-count" aria-hidden="true">${count}</i>` : '';
+    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${confirmed ? 'bekreftet kl. 17:00' : 'åpen for valg'}${voteLabel}"><span>${main}</span>${note ? `<small>${note}</small>` : ''}${badge}</button>`;
   }
 
   roomWeekBar(date) {

@@ -106,9 +106,9 @@ test('install button has a reliable mobile fallback when native prompt is unavai
 test('lønningspils voting is shown above parking and confirms at four people for 17:00 without exposing threshold counts', async()=>{
   const [html,app,schedule,css]=await Promise.all([read('index.html'),read('app.js'),read('schedule-view.js'),read('styles/schedule.css')]);
   assert.match(html,/id="payday-dialog"/); assert.match(html,/id="payday-mobile"/);
-  assert.match(schedule,/Lønningspils/); assert.match(schedule,/paydayRow/); assert.match(schedule,/PAYDAY_THRESHOLD = 4/); assert.match(schedule,/'Vote'/); assert.doesNotMatch(schedule,/3 personer|\/\$\{PAYDAY_THRESHOLD\}/);
-  assert.match(app,/PAYDAY_THRESHOLD = 4/); assert.match(app,/startHour: 17/); assert.match(app,/togglePaydayVote/); assert.match(app,/driver\.id !== 'guest'/); assert.match(app,/'Vote'/); assert.doesNotMatch(app,/3 personer|trenger \$\{PAYDAY_THRESHOLD/);
-  assert.match(css,/payday-cell\.confirmed/); assert.match(css,/payday-mobile/);
+  assert.match(schedule,/Lønningspils/); assert.match(schedule,/paydayRow/); assert.match(schedule,/PAYDAY_THRESHOLD = 4/); assert.match(schedule,/'Vote'/); assert.match(schedule,/count > 0 \? \`<i class="payday-vote-count"/); assert.doesNotMatch(schedule,/3 personer|\/\$\{PAYDAY_THRESHOLD\}/);
+  assert.match(app,/PAYDAY_THRESHOLD = 4/); assert.match(app,/startHour: 17/); assert.match(app,/togglePaydayVote/); assert.match(app,/driver\.id !== 'guest'/); assert.match(app,/'Vote'/); assert.match(app,/status\.count > 0 \? \`<i class="payday-vote-count"/); assert.doesNotMatch(app,/3 personer|trenger \$\{PAYDAY_THRESHOLD/);
+  assert.match(css,/payday-cell\.confirmed/); assert.match(css,/payday-mobile/); assert.match(css,/\.payday-vote-count\{position:absolute/);
 });
 
 

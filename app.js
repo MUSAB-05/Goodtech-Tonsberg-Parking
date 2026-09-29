@@ -409,7 +409,8 @@ function renderPaydayMobile() {
     const day = formatDate(date, { weekday:'short' });
     const dateLabel = formatDate(date, { day:'numeric', month:'short' });
     const value = status.confirmed ? '🍻 17:00' : 'Vote';
-    return `<button type="button" class="payday-mobile-day ${status.confirmed ? 'confirmed' : ''} ${date === state.today ? 'today' : ''}" data-payday-mobile-date="${date}"><span>${esc(day)}</span><b>${esc(dateLabel)}</b><strong>${value}</strong></button>`;
+    const badge = status.count > 0 ? `<i class="payday-vote-count" aria-hidden="true">${status.count}</i>` : '';
+    return `<button type="button" class="payday-mobile-day ${status.confirmed ? 'confirmed' : ''} ${date === state.today ? 'today' : ''}" data-payday-mobile-date="${date}" aria-label="${esc(day)} ${esc(dateLabel)} Lønningspils${status.count > 0 ? `, ${status.count} vote${status.count === 1 ? '' : 's'}` : ''}"><span>${esc(day)}</span><b>${esc(dateLabel)}</b><strong>${value}</strong>${badge}</button>`;
   }).join('');
   container.innerHTML = `<div class="payday-mobile-head"><div><small>SOSIALT</small><strong>🍻 Lønningspils</strong></div></div><div class="payday-mobile-days">${days}</div>`;
   container.querySelectorAll('[data-payday-mobile-date]').forEach(button => button.addEventListener('click', () => openPaydayVotes(button.dataset.paydayMobileDate)));
