@@ -1,7 +1,7 @@
 # Parking storage migration
 
 The public website stays at `https://musab-05.github.io/Goodtech-Tonsberg-Parking/`.
-The live site currently uses Mantle. Do not switch `storageProvider` until all Mantle records are copied and verified.
+The live site currently uses Mantle. After cutover, booking months use Firebase live updates while the page is visible; they are not downloaded on a repeating timer. Do not switch `storageProvider` until all Mantle records are copied and verified.
 
 ## Create the no-cost Firebase project
 
