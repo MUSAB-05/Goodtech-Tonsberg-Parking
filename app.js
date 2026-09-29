@@ -642,6 +642,25 @@ async function updateParkingBooking(value) {
     return;
   }
 
+  if (APP_CONFIG.storageProvider === 'd1') {
+    mutationsInFlight++;
+    try {
+      await backend.clearBookingIfMatches(key, current);
+      delete state.bookings[key];
+      await recordFrequencyForBookingKey(key, null);
+      $('#picker').close();
+      state.selectedSpace = null;
+      render();
+      toast('Parking space cleared');
+    } catch (error) {
+      toast(error.kind === 'stale' ? 'Booking changed. Nothing was cleared.' : 'Could not clear. Try again.');
+    } finally {
+      mutationsInFlight--;
+      await reloadBookings(true);
+    }
+    return;
+  }
+
   delete state.bookings[key];
   $('#picker').close();
   mutationsInFlight++;
