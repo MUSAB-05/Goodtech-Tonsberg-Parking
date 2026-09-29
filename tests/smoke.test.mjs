@@ -85,7 +85,24 @@ test('app keeps the existing shared storage and live polling behind the access g
 
 test('sync diagnostics tests browser reachability, authenticated API and queued writes', async()=>{
   const [diag,css]=await Promise.all([read('sync-diagnostics.js'),read('styles/dialogs.css')]);
-  assert.match(diag,/mode: 'no-cors'/); assert.match(diag,/backend\.healthCheck/); assert.match(diag,/backend\.setBookings/); assert.match(diag,/Queue reconciliation/); assert.match(css,/diagnostics-output/);
+  assert.match(diag,/mode: 'no-cors'/); assert.match(diag,/backend\.healthCheck/); assert.match(diag,/clearBookingIfMatches/); assert.match(diag,/Protected legacy clear/); assert.match(diag,/Queue reconciliation/); assert.match(css,/diagnostics-output/);
+});
+
+test('polling is ten seconds and rate-limit backoff protects MantleDB', async()=>{
+  const [config,app]=await Promise.all([read('config.js'),read('app.js')]);
+  assert.match(config,/pollMs: 10000/);
+  assert.match(app,/RATE_LIMIT_BACKOFF_MS = 60000/);
+  assert.match(app,/Date\.now\(\) < rateLimitUntil/);
+  assert.match(app,/Rate limited/);
+});
+
+test('offline parking clears carry the original booking and cannot delete newer data', async()=>{
+  const [app,backend]=await Promise.all([read('app.js'),read('backend-adapter.js')]);
+  assert.match(app,/persistShared\(key, null, current\)/);
+  assert.match(app,/pendingExpected/);
+  assert.match(app,/clearBookingIfMatches/);
+  assert.match(backend,/clearBookingIfMatches/);
+  assert.match(backend,/staleError/);
 });
 
 test('robots discourages indexing', async()=>{ assert.match(await read('robots.txt'),/Disallow: \//); });

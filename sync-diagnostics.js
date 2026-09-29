@@ -17,6 +17,16 @@ function pendingValue(entry) {
   return entry ?? null;
 }
 
+function pendingExpected(entry) {
+  if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'expected')) return entry.expected;
+  return undefined;
+}
+
+function isParkingKey(key) {
+  const match = /^\d{4}-\d{2}-\d{2}__(.+)$/.exec(String(key || ''));
+  return Boolean(match && !match[1].startsWith('meeting-room__') && match[1] !== 'payday-drinks');
+}
+
 function readPending() {
   try {
     const parsed = JSON.parse(localStorage.getItem(PENDING_KEY) || '{}');
@@ -106,33 +116,63 @@ async function reconcilePending(lines, shouldWrite) {
   if (!entries.length) return { before: 0, after: 0, recovered: 0 };
 
   lines.push(`   Keys: ${entries.map(([key]) => key).join(', ')}`);
-  const changes = Object.fromEntries(entries.map(([key, entry]) => [key, pendingValue(entry)]));
-  const months = [...new Set(entries.map(([key]) => String(key).slice(0, 7)))];
   let writeError = null;
+  let protectedCount = 0;
 
   if (shouldWrite) {
-    try {
-      await backend.setBookings(changes);
-      lines.push('4. Batch retry: PASS');
-    } catch (error) {
-      writeError = error;
-      lines.push(`4. Batch retry: FAIL — ${describeError(error)}`);
+    for (const [key, entry] of entries) {
+      const desired = pendingValue(entry);
+      try {
+        if (isParkingKey(key) && desired?.driverId) {
+          await backend.claimBooking(key, desired);
+        } else if (isParkingKey(key) && desired == null) {
+          const expected = pendingExpected(entry);
+          if (expected === undefined) {
+            delete pending[key];
+            protectedCount++;
+            lines.push(`4. Protected legacy clear: ${key} was discarded without touching newer shared data.`);
+            continue;
+          }
+          await backend.clearBookingIfMatches(key, expected);
+        } else {
+          await backend.setBooking(key, desired);
+        }
+      } catch (error) {
+        if (error?.kind === 'busy' || error?.kind === 'stale') {
+          delete pending[key];
+          protectedCount++;
+          lines.push(`4. Protected conflict: ${key} was discarded — ${describeError(error)}`);
+          continue;
+        }
+        writeError = writeError || error;
+        lines.push(`4. Retry failed for ${key} — ${describeError(error)}`);
+      }
     }
+    savePending(pending);
+    lines.push(`4. Guarded retry: ${writeError ? 'PARTIAL' : 'PASS'}${protectedCount ? ` · ${protectedCount} stale change${protectedCount === 1 ? '' : 's'} protected` : ''}`);
   } else {
-    lines.push('4. Batch retry: skipped during silent probe');
+    lines.push('4. Guarded retry: skipped during silent probe');
   }
 
+  const remaining = Object.entries(pending);
+  if (!remaining.length) {
+    lines.push('5. Read-back verification: not needed');
+    lines.push('6. Queue reconciliation: queue is clear');
+    return { before: entries.length, after: 0, recovered: entries.length - protectedCount, protected: protectedCount, error: writeError };
+  }
+
+  const months = [...new Set(remaining.map(([key]) => String(key).slice(0, 7)))];
   let remote = null;
   try {
     remote = await backend.getBookings(months);
     lines.push('5. Read-back verification: PASS');
   } catch (error) {
     lines.push(`5. Read-back verification: FAIL — ${describeError(error)}`);
-    return { before: entries.length, after: entries.length, recovered: 0, error: writeError || error };
+    return { before: entries.length, after: remaining.length, recovered: 0, protected: protectedCount, error: writeError || error };
   }
 
   let recovered = 0;
-  for (const [key, entry] of entries) {
+  for (const [key, entry] of remaining) {
     const desired = pendingValue(entry);
     const actual = Object.prototype.hasOwnProperty.call(remote || {}, key) ? remote[key] : null;
     if (backend.valuesMatch(actual, desired)) {
@@ -142,8 +182,8 @@ async function reconcilePending(lines, shouldWrite) {
   }
   savePending(pending);
   const after = Object.keys(pending).length;
-  lines.push(`6. Queue reconciliation: ${recovered} confirmed remotely, ${after} still pending`);
-  return { before: entries.length, after, recovered, error: writeError };
+  lines.push(`6. Queue reconciliation: ${recovered} confirmed remotely, ${protectedCount} protected, ${after} still pending`);
+  return { before: entries.length, after, recovered, protected: protectedCount, error: writeError };
 }
 
 function recommendation(domainOk, apiOk, result, lines) {

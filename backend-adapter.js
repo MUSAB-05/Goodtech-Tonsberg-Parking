@@ -93,6 +93,23 @@ export class ParkingBackend {
     return error;
   }
 
+  staleError() {
+    const error = new Error('Booking changed before pending removal could sync.');
+    error.kind = 'stale';
+    return error;
+  }
+
+  async clearBookingIfMatches(key, expectedBooking) {
+    const month = String(key).slice(0, 7);
+    const current = await this.ensureMonth(month);
+    const existing = Object.prototype.hasOwnProperty.call(current || {}, key) ? current[key] : null;
+    if (existing == null) return { cleared: false, alreadyEmpty: true };
+    if (!expectedBooking || !this.valuesMatch(existing, expectedBooking)) throw this.staleError();
+
+    await this.patchMonth(month, { [key]: null });
+    return { cleared: true };
+  }
+
   async claimBooking(key, booking) {
     const month = String(key).slice(0, 7);
     const desired = booking ?? null;
