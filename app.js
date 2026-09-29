@@ -29,6 +29,13 @@ let pendingFlushInFlight = false;
 let lastPaydayEventsRefresh = 0;
 let rateLimitUntil = 0;
 const RATE_LIMIT_BACKOFF_MS = 60000;
+const SNAPSHOT_KEY = 'gt-parking-last-known-v1';
+const ACTIVE_POLL_MS = Math.max(5000, Number(APP_CONFIG.pollMs || 10000));
+const IDLE_POLL_MS = 60000;
+const ACTIVE_WINDOW_MS = 120000;
+let lastSnapshotAt = 0;
+let lastUserActivityAt = Date.now();
+let pollTimer = null;
 
 const backend = new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
@@ -156,6 +163,7 @@ async function refreshPaydayEvents(force = false) {
   try {
     state.paydayEvents = await backend.getPaydayEvents();
     lastPaydayEventsRefresh = Date.now();
+    saveLastKnownSnapshot();
     renderEventCountdown();
   } catch (error) {
     noteRateLimit(error);
@@ -196,6 +204,7 @@ function closeDialogSafe(dialog) {
 async function refreshGreenDeeds() {
   try {
     state.greenDeeds = await backend.getGreenDeeds();
+    saveLastKnownSnapshot();
     renderGreenDeeds();
   } catch (error) {
     noteRateLimit(error);
@@ -210,6 +219,7 @@ async function addGreenDeed(type) {
   try {
     await backend.addGreenDeed(id, entry);
     state.greenDeeds[id] = entry;
+    saveLastKnownSnapshot();
     renderGreenDeeds();
     closeDialogSafe($('#green-deeds-dialog'));
     toast('🌱 Green deed added');
@@ -230,7 +240,40 @@ function noteRateLimit(error) {
   return true;
 }
 function rateLimitDetail() {
-  return 'Shared storage is temporarily rate limited. Automatic reads will pause for about a minute and then retry.';
+  const cached = lastSnapshotAt ? ' The last successful snapshot remains visible.' : '';
+  return `Shared storage is temporarily rate limited. Automatic reads will pause for about a minute and then retry.${cached}`;
+}
+function rateLimitLabel() { return lastSnapshotAt ? 'Cached · rate limited' : 'Rate limited'; }
+
+function loadLastKnownSnapshot() {
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null');
+    if (!snapshot || typeof snapshot !== 'object') return false;
+    if (snapshot.bookings && typeof snapshot.bookings === 'object' && !Array.isArray(snapshot.bookings)) state.bookings = snapshot.bookings;
+    if (snapshot.paydayEvents && typeof snapshot.paydayEvents === 'object' && !Array.isArray(snapshot.paydayEvents)) state.paydayEvents = snapshot.paydayEvents;
+    if (snapshot.greenDeeds && typeof snapshot.greenDeeds === 'object' && !Array.isArray(snapshot.greenDeeds)) state.greenDeeds = snapshot.greenDeeds;
+    const parsedTime = Date.parse(snapshot.savedAt || '');
+    lastSnapshotAt = Number.isFinite(parsedTime) ? parsedTime : Date.now();
+    lastFingerprint = fingerprint(state.bookings);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function saveLastKnownSnapshot() {
+  try {
+    const savedAt = new Date().toISOString();
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      savedAt,
+      bookings: state.bookings || {},
+      paydayEvents: state.paydayEvents || {},
+      greenDeeds: state.greenDeeds || {}
+    }));
+    lastSnapshotAt = Date.parse(savedAt);
+  } catch (error) {
+    console.warn('Could not save local parking snapshot', error);
+  }
 }
 
 function spaceById(id) { return state.spaces.find(space => space.id === id); }
@@ -520,6 +563,7 @@ async function togglePaydayVote(driverId) {
     } catch (summaryError) {
       console.warn('Could not update Lønningspils countdown', summaryError);
     }
+    saveLastKnownSnapshot();
     render();
     renderPaydayDialog();
     if (value?.confirmed) toast('🍻 Lønningspils confirmed · 17:00');
@@ -613,6 +657,7 @@ async function updateParkingBooking(value) {
       await backend.claimBooking(key, value);
       state.bookings[key] = value;
       clearPendingWrite(key);
+      saveLastKnownSnapshot();
       await recordFrequencyForBookingKey(key, value);
       $('#picker').close();
       state.selectedSpace = null;
@@ -622,7 +667,7 @@ async function updateParkingBooking(value) {
     } catch (error) {
       if (error?.kind === 'busy') toast('Place is busy.');
       else if (noteRateLimit(error)) {
-        setConnection('Rate limited', 'pending', rateLimitDetail());
+        setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
         toast('Shared storage is busy. Try again shortly.');
       } else {
         setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
@@ -653,11 +698,12 @@ async function updateParkingBooking(value) {
         toast('Booking changed. Nothing was cleared.');
       } else {
         await recordFrequencyForBookingKey(key, null);
+        saveLastKnownSnapshot();
         setConnection('Live', 'live', 'Shared bookings are synchronized.');
         toast('Parking space cleared');
       }
     } else if (isRateLimitError(result.error)) {
-      setConnection('Rate limited', 'pending', rateLimitDetail());
+      setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
       toast('Removal queued · sync will retry automatically');
     } else {
       setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Removal is saved on this device and will retry automatically.`);
@@ -673,11 +719,12 @@ async function updateParkingBooking(value) {
 async function reloadBookings(force = false) {
   if (refreshInFlight || mutationsInFlight || !state.week.length) return;
   if (Date.now() < rateLimitUntil) {
-    setConnection('Rate limited', 'pending', rateLimitDetail());
+    setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
     return;
   }
   refreshInFlight = true;
   let syncError = null;
+  let gotRemoteBookings = false;
   try {
     if (Object.keys(pendingWrites).length) {
       try { await flushPendingWrites(); }
@@ -688,6 +735,7 @@ async function reloadBookings(force = false) {
     try {
       const remote = await backend.getBookings(months);
       nextBase = mergeVisibleMonths(state.bookings, remote, months);
+      gotRemoteBookings = true;
     } catch (error) {
       noteRateLimit(error);
       syncError = syncError || error;
@@ -697,15 +745,17 @@ async function reloadBookings(force = false) {
     if (force || nextFingerprint !== lastFingerprint) {
       state.bookings = next;
       lastFingerprint = nextFingerprint;
+      if (gotRemoteBookings) saveLastKnownSnapshot();
       render();
     }
+    if (gotRemoteBookings && nextFingerprint === lastFingerprint) saveLastKnownSnapshot();
     await refreshPaydayEvents(force);
     if (force) await refreshGreenDeeds();
     const pendingCount = Object.keys(pendingWrites).length;
     if (pendingCount) {
       setConnection(`Sync pending (${pendingCount})`, 'pending', `${syncError?.message || 'Shared storage unavailable.'} ${pendingCount} local change${pendingCount === 1 ? '' : 's'} queued for retry.`);
     } else if (syncError) {
-      if (isRateLimitError(syncError)) setConnection('Rate limited', 'pending', rateLimitDetail());
+      if (isRateLimitError(syncError)) setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
       else setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', syncError.message);
     } else {
       rateLimitUntil = 0;
@@ -717,7 +767,7 @@ async function reloadBookings(force = false) {
     state.bookings = applyPendingWrites(state.bookings);
     render();
     const pendingCount = Object.keys(pendingWrites).length;
-    if (isRateLimitError(error)) setConnection('Rate limited', 'pending', rateLimitDetail());
+    if (isRateLimitError(error)) setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
     else setConnection(pendingCount ? `Sync pending (${pendingCount})` : (navigator.onLine === false ? 'Offline' : 'Sync issue'), pendingCount ? 'pending' : 'offline', error.message);
   } finally {
     refreshInFlight = false;
@@ -762,7 +812,9 @@ async function init() {
     const monday = initialWeekDate(now.date, now.weekday);
     state.week = weekDates(monday);
     state.selectedDate = now.date;
+    const restoredSnapshot = loadLastKnownSnapshot();
     render();
+    if (restoredSnapshot) setConnection('Cached', 'pending', 'Showing the last successful shared snapshot while checking for newer data.');
     await Promise.all([refreshPaydayEvents(true), refreshGreenDeeds()]);
     await reloadBookings(true);
   } catch (error) {
@@ -806,6 +858,8 @@ $('#green-deeds-dialog')?.addEventListener('click', event => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    lastUserActivityAt = Date.now();
+    scheduleNextPoll(ACTIVE_POLL_MS);
     if (lastConnectionError) setConnection('Reconnecting…', 'checking', lastConnectionError);
     reloadBookings(true);
   }
@@ -890,5 +944,21 @@ if ('serviceWorker' in navigator) {
     .catch(console.error);
 }
 applyTheme(localStorage.getItem('gt-parking-theme') || 'dark');
-setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(5000, Number(APP_CONFIG.pollMs || 10000)));
+function currentPollDelay() {
+  return Date.now() - lastUserActivityAt <= ACTIVE_WINDOW_MS ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+}
+function scheduleNextPoll(delay = currentPollDelay()) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    if (document.visibilityState === 'visible') await reloadBookings(false);
+    scheduleNextPoll();
+  }, delay);
+}
+function noteUserActivity() {
+  lastUserActivityAt = Date.now();
+  scheduleNextPoll(ACTIVE_POLL_MS);
+}
+document.addEventListener('pointerdown', noteUserActivity, { passive:true });
+document.addEventListener('keydown', noteUserActivity);
+scheduleNextPoll(ACTIVE_POLL_MS);
 init();

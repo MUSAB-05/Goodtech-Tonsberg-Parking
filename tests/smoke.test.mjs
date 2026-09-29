@@ -8,7 +8,7 @@ test('PWA files, Goodtech logo, install metadata and access gate are present', a
   const [html,manifest,sw,gate]=await Promise.all([read('index.html'),read('manifest.webmanifest'),read('sw.js'),read('access-gate.js')]);
   assert.match(html,/manifest\.webmanifest/); assert.match(html,/install-app/); assert.match(html,/goodtech-logo\.webp/); assert.match(html,/id="access-gate"/); assert.match(html,/access-gate\.js/);
   const parsed=JSON.parse(manifest); assert.equal(parsed.short_name,'GT Parking'); assert.equal(parsed.display,'standalone'); assert.equal(parsed.scope,'./');
-  assert.match(sw,/gt-parking-shell-v11-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/access-gate\.js/); assert.match(sw,/styles\/access\.css/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
+  assert.match(sw,/gt-parking-shell-v12-/); assert.match(sw,/cache:'no-store'/); assert.match(sw,/client\.navigate/); assert.match(sw,/access-gate\.js/); assert.match(sw,/styles\/access\.css/); assert.match(sw,/meeting-room\.js/); assert.match(sw,/goodtech-logo\.webp/); assert.match(sw,/schedule-view\.js/); assert.match(sw,/room-dialog-controller\.js/);
   assert.match(gate,/EXPECTED_HASH/); assert.match(gate,/sessionStorage/); assert.match(gate,/import\('\.\/app\.js'\)/); assert.doesNotMatch(gate,/['"]3111['"]/);
 });
 
@@ -88,12 +88,33 @@ test('sync diagnostics tests browser reachability, authenticated API and queued 
   assert.match(diag,/mode: 'no-cors'/); assert.match(diag,/backend\.healthCheck/); assert.match(diag,/clearBookingIfMatches/); assert.match(diag,/Protected legacy clear/); assert.match(diag,/Queue reconciliation/); assert.match(css,/diagnostics-output/);
 });
 
-test('polling is ten seconds and rate-limit backoff protects MantleDB', async()=>{
+test('polling is responsive while active, backs off while idle, and protects MantleDB rate limits', async()=>{
   const [config,app]=await Promise.all([read('config.js'),read('app.js')]);
   assert.match(config,/pollMs: 10000/);
+  assert.match(app,/ACTIVE_POLL_MS/);
+  assert.match(app,/IDLE_POLL_MS = 60000/);
+  assert.match(app,/ACTIVE_WINDOW_MS = 120000/);
+  assert.match(app,/scheduleNextPoll/);
   assert.match(app,/RATE_LIMIT_BACKOFF_MS = 60000/);
   assert.match(app,/Date\.now\(\) < rateLimitUntil/);
-  assert.match(app,/Rate limited/);
+  assert.match(app,/Cached · rate limited/);
+});
+
+test('last successful shared state is cached locally instead of showing an empty board on backend failure', async()=>{
+  const app=await read('app.js');
+  assert.match(app,/SNAPSHOT_KEY = 'gt-parking-last-known-v1'/);
+  assert.match(app,/loadLastKnownSnapshot/);
+  assert.match(app,/saveLastKnownSnapshot/);
+  assert.match(app,/Showing the last successful shared snapshot/);
+  assert.match(app,/gotRemoteBookings/);
+});
+
+test('deployment tolerates only Mantle rate limiting and keepalive does not fire on every push', async()=>{
+  const [smoke,keepalive]=await Promise.all([read('scripts/backend-smoke.mjs'),read('.github/workflows/mantle-keepalive.yml')]);
+  assert.match(smoke,/error\?\.status === 429/);
+  assert.match(smoke,/live backend smoke is deferred/);
+  assert.doesNotMatch(keepalive,/push:/);
+  assert.match(keepalive,/schedule:/);
 });
 
 test('offline parking clears carry the original booking and cannot delete newer data', async()=>{
