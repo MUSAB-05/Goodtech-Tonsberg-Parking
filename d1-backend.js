@@ -10,6 +10,7 @@ export class D1Backend {
     if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid booking month.');
     return `bookings/${month}`;
   }
+  valuesMatch(a, b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
   async request(route, path, { method = 'GET', body } = {}) {
     const code = this.session.getItem('gt-parking-access-code-v1');
     if (!code) throw new Error('Please enter the parking access code again.');
