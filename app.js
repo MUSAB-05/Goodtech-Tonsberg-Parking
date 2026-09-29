@@ -1,5 +1,6 @@
 import { APP_CONFIG } from './config.js';
 import { ParkingBackend } from './backend-adapter.js';
+import { FirebaseBackend } from './firebase-backend.js';
 import { ParkingMap } from './parking-map.js';
 import { MeetingRoomView } from './meeting-room.js';
 import { RoomDialogController } from './room-dialog-controller.js';
@@ -63,11 +64,13 @@ function saveSnapshot() {
 }
 
 
-const backend = new ParkingBackend({
-  baseUrl: APP_CONFIG.mantleBaseUrl,
-  namespace: APP_CONFIG.mantleNamespace,
-  key: APP_CONFIG.mantleKey
-});
+const backend = APP_CONFIG.storageProvider === 'firebase'
+  ? new FirebaseBackend(APP_CONFIG.firebase)
+  : new ParkingBackend({
+      baseUrl: APP_CONFIG.mantleBaseUrl,
+      namespace: APP_CONFIG.mantleNamespace,
+      key: APP_CONFIG.mantleKey
+    });
 
 const map = new ParkingMap($('#parking-map'), {
   onSelect: openPicker,
