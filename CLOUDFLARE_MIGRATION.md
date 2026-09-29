@@ -7,8 +7,8 @@ The public site stays at `https://musab-05.github.io/Goodtech-Tonsberg-Parking/`
 The D1 database `gt-parking` was created with ID `6f1a86af-e7d1-4510-90f5-29443b5484a7`. A manual GitHub Actions workflow on `main` deploys the API from this branch; it does not change the live website.
 
 1. In Cloudflare, find the **account ID** (distinct from the D1 database ID). Create an account-scoped API token with **Edit Cloudflare Workers** and **D1 Edit** permissions.
-2. In the GitHub repository, under **Settings → Secrets and variables → Actions**, add repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. Never paste the token into a chat or commit it.
-3. Under **Actions → Deploy parking storage API**, choose **Run workflow** on `main`. It tests the Worker, applies `cloudflare/schema.sql`, deploys `gt-parking-api`, and sets `ACCESS_CODE_HASH` from the existing public access gate. Save the resulting `workers.dev` URL from the run output. The website URL remains GitHub Pages.
+2. In the GitHub repository, under **Settings → Secrets and variables → Actions**, add the repository secret `CLOUDFLARE_API_TOKEN`. Never paste the token into a chat or commit it.
+3. Under **Actions → Deploy parking storage API**, choose **Run workflow** on `main` and paste the non-secret account ID into its input. It tests the Worker, applies `cloudflare/schema.sql`, deploys `gt-parking-api`, and sets `ACCESS_CODE_HASH` from the existing public access gate. Save the resulting `workers.dev` URL from the run output. The website URL remains GitHub Pages.
 4. Keep the live `config.js` on Mantle. Verify the deployed API before migrating records.
 
 ## Preserve and copy the records
