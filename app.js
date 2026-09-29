@@ -32,6 +32,8 @@ const SNAPSHOT_KEY = 'gt-parking-last-known-v1';
 const RATE_LIMIT_PAUSE_MS = 30 * 60 * 1000;
 let rateLimitUntil = Number(localStorage.getItem('gt-parking-rate-limit-until') || 0) || 0;
 let hasSnapshot = false;
+let stopFirebaseStream = null;
+let firebaseStreamGeneration = 0;
 
 function noteRateLimit(error) {
   if (error?.status !== 429) return false;
@@ -716,6 +718,27 @@ async function reloadBookings(force = false) {
   }
 }
 
+async function startFirebaseStream() {
+  if (APP_CONFIG.storageProvider !== 'firebase' || !state.week.length || document.visibilityState === 'hidden') return;
+  const generation = ++firebaseStreamGeneration;
+  stopFirebaseStream?.();
+  stopFirebaseStream = null;
+  try {
+    const stop = await backend.subscribeMonths(visibleMonths(), (month, snapshot) => {
+      if (generation !== firebaseStreamGeneration) return;
+      state.bookings = applyPendingWrites(mergeVisibleMonths(state.bookings, snapshot, [month]));
+      lastFingerprint = fingerprint(state.bookings);
+      saveSnapshot();
+      render();
+      if (!Object.keys(pendingWrites).length) setConnection('Live', 'live', 'Shared bookings are synchronized.');
+    }, error => {
+      if (generation === firebaseStreamGeneration) setConnection('Sync issue', 'offline', error.message);
+    });
+    if (generation !== firebaseStreamGeneration) stop();
+    else stopFirebaseStream = stop;
+  } catch (error) { setConnection('Sync issue', 'offline', error.message); }
+}
+
 const roomController = new RoomDialogController({
   state, backend, driverById, selectDate, render, setConnection, toast, reloadBookings, persistShared,
   beginMutation: () => { mutationsInFlight++; },
@@ -727,6 +750,7 @@ function shiftWeek(amount) {
   state.selectedDate = addDays(state.selectedDate, amount * 7);
   render();
   reloadBookings(true);
+  startFirebaseStream();
 }
 
 function applyTheme(theme) {
@@ -759,6 +783,7 @@ async function init() {
     if (restored) setConnection('Cached', 'pending', 'Showing last saved bookings while checking MantleDB.');
     await reloadBookings(true);
     if (Date.now() >= rateLimitUntil) await refreshGreenDeeds();
+    await startFirebaseStream();
   } catch (error) {
     console.error(error);
     setConnection('Offline', 'offline', error.message);
@@ -802,6 +827,11 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     if (lastConnectionError) setConnection('Reconnecting…', 'checking', lastConnectionError);
     reloadBookings(true);
+    startFirebaseStream();
+  } else if (APP_CONFIG.storageProvider === 'firebase') {
+    firebaseStreamGeneration++;
+    stopFirebaseStream?.();
+    stopFirebaseStream = null;
   }
 });
 window.addEventListener('online', () => { setConnection('Reconnecting…', 'checking', 'Internet connection restored; checking shared storage.'); reloadBookings(true); });
@@ -884,5 +914,7 @@ if ('serviceWorker' in navigator) {
     .catch(console.error);
 }
 applyTheme(localStorage.getItem('gt-parking-theme') || 'dark');
-setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(1000, Number(APP_CONFIG.pollMs || 1500)));
+if (APP_CONFIG.storageProvider !== 'firebase') {
+  setInterval(() => { if (document.visibilityState === 'visible') reloadBookings(false); }, Math.max(1000, Number(APP_CONFIG.pollMs || 1500)));
+}
 init();
