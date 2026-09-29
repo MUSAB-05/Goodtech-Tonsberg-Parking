@@ -66,6 +66,11 @@ function saveSnapshot() {
 }
 
 
+if (APP_CONFIG.storageProvider === 'firebase') {
+  rateLimitUntil = 0;
+  localStorage.removeItem('gt-parking-rate-limit-until');
+}
+
 const backend = APP_CONFIG.storageProvider === 'firebase'
   ? new FirebaseBackend(APP_CONFIG.firebase)
   : new ParkingBackend({
