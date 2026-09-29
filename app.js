@@ -27,6 +27,41 @@ const PAYDAY_THRESHOLD = 4;
 let pendingWrites = loadPendingWrites();
 let pendingFlushInFlight = false;
 let lastPaydayEventsRefresh = 0;
+const SNAPSHOT_KEY = 'gt-parking-last-known-v1';
+const RATE_LIMIT_PAUSE_MS = 30 * 60 * 1000;
+let rateLimitUntil = Number(localStorage.getItem('gt-parking-rate-limit-until') || 0) || 0;
+let hasSnapshot = false;
+
+function noteRateLimit(error) {
+  if (error?.status !== 429) return false;
+  rateLimitUntil = Math.max(rateLimitUntil, Date.now() + RATE_LIMIT_PAUSE_MS);
+  localStorage.setItem('gt-parking-rate-limit-until', String(rateLimitUntil));
+  return true;
+}
+
+function loadSnapshot() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null');
+    if (!saved || typeof saved !== 'object') return false;
+    for (const name of ['bookings', 'paydayEvents', 'greenDeeds']) {
+      if (saved[name] && typeof saved[name] === 'object' && !Array.isArray(saved[name])) state[name] = saved[name];
+    }
+    lastFingerprint = fingerprint(state.bookings);
+    hasSnapshot = true;
+    return true;
+  } catch { return false; }
+}
+
+function saveSnapshot() {
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      bookings: state.bookings, paydayEvents: state.paydayEvents, greenDeeds: state.greenDeeds
+    }));
+    hasSnapshot = true;
+  } catch (error) { console.warn('Could not save parking snapshot', error); }
+}
+
 
 const backend = new ParkingBackend({
   baseUrl: APP_CONFIG.mantleBaseUrl,
@@ -154,8 +189,10 @@ async function refreshPaydayEvents(force = false) {
   try {
     state.paydayEvents = await backend.getPaydayEvents();
     lastPaydayEventsRefresh = Date.now();
+    saveSnapshot();
     renderEventCountdown();
   } catch (error) {
+    noteRateLimit(error);
     console.warn('Could not refresh Lønningspils countdown', error);
   }
 }
@@ -193,8 +230,10 @@ function closeDialogSafe(dialog) {
 async function refreshGreenDeeds() {
   try {
     state.greenDeeds = await backend.getGreenDeeds();
+    saveSnapshot();
     renderGreenDeeds();
   } catch (error) {
+    noteRateLimit(error);
     console.warn('Could not refresh Green deeds', error);
   }
 }
@@ -311,6 +350,7 @@ async function persistShared(key, value) {
     clearPendingWrite(key);
     return { synced: true };
   } catch (error) {
+    noteRateLimit(error);
     return { synced: false, error };
   }
 }
@@ -336,6 +376,7 @@ async function flushPendingWrites() {
           clearPendingWrite(key);
           continue;
         }
+        noteRateLimit(error);
         failures.push(error);
         console.warn('Pending booking sync failed', key, error);
       }
@@ -617,6 +658,10 @@ async function updateParkingBooking(value) {
 
 async function reloadBookings(force = false) {
   if (refreshInFlight || mutationsInFlight || !state.week.length) return;
+  if (Date.now() < rateLimitUntil) {
+    setConnection(hasSnapshot ? 'Cached · rate limited' : 'Rate limited', 'pending', 'MantleDB is rate limited. Retrying after a 30 minute pause.');
+    return;
+  }
   refreshInFlight = true;
   let syncError = null;
   try {
@@ -626,10 +671,13 @@ async function reloadBookings(force = false) {
     }
     const months = visibleMonths();
     let nextBase = state.bookings || {};
+    let gotRemote = false;
     try {
       const remote = await backend.getBookings(months);
       nextBase = mergeVisibleMonths(state.bookings, remote, months);
+      gotRemote = true;
     } catch (error) {
+      noteRateLimit(error);
       syncError = syncError || error;
     }
     const next = applyPendingWrites(nextBase);
@@ -637,20 +685,25 @@ async function reloadBookings(force = false) {
     if (force || nextFingerprint !== lastFingerprint) {
       state.bookings = next;
       lastFingerprint = nextFingerprint;
+      if (gotRemote) saveSnapshot();
       render();
     }
-    await refreshPaydayEvents(force);
-    if (force) await refreshGreenDeeds();
+    if (Date.now() >= rateLimitUntil) await refreshPaydayEvents(force);
+    if (force && Date.now() >= rateLimitUntil) await refreshGreenDeeds();
     const pendingCount = Object.keys(pendingWrites).length;
     if (pendingCount) {
       setConnection(`Sync pending (${pendingCount})`, 'pending', `${syncError?.message || 'Shared storage unavailable.'} ${pendingCount} local change${pendingCount === 1 ? '' : 's'} queued for retry.`);
     } else if (syncError) {
-      setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', syncError.message);
+      if (syncError.status === 429) setConnection(hasSnapshot ? 'Cached · rate limited' : 'Rate limited', 'pending', 'MantleDB is rate limited. Retrying after a 30 minute pause.');
+      else setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', syncError.message);
     } else {
+      rateLimitUntil = 0;
+      localStorage.removeItem('gt-parking-rate-limit-until');
       setConnection('Live', 'live', 'Shared bookings are synchronized.');
     }
   } catch (error) {
     console.error(error);
+    noteRateLimit(error);
     state.bookings = applyPendingWrites(state.bookings);
     render();
     const pendingCount = Object.keys(pendingWrites).length;
@@ -698,9 +751,11 @@ async function init() {
     const monday = initialWeekDate(now.date, now.weekday);
     state.week = weekDates(monday);
     state.selectedDate = now.date;
+    const restored = loadSnapshot();
     render();
-    await Promise.all([refreshPaydayEvents(true), refreshGreenDeeds()]);
+    if (restored) setConnection('Cached', 'pending', 'Showing last saved bookings while checking MantleDB.');
     await reloadBookings(true);
+    if (Date.now() >= rateLimitUntil) await refreshGreenDeeds();
   } catch (error) {
     console.error(error);
     setConnection('Offline', 'offline', error.message);
