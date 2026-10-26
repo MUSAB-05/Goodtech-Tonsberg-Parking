@@ -4,6 +4,7 @@
 @import url('./styles/dialogs.css');
 @import url('./styles/responsive.css');
 @import url('./styles/access.css');
+@import url('./community-board.css');
 
 /* Goodtech contrast system. Dark and light are intentionally tuned separately. */
 :root{

@@ -17,6 +17,8 @@ export class ParkingBackend {
   frequencyPath(spaceId) { return `frequency/${encodeURIComponent(String(spaceId || ''))}`; }
   paydayEventsPath() { return 'social/payday-events'; }
   greenDeedsPath() { return 'social/green-deeds'; }
+  announcementsPath() { return 'social/announcements'; }
+  poolMatchesPath() { return 'social/pool-matches'; }
   url(path) { return `${this.baseUrl}/${encodeURIComponent(this.namespace)}/${path}`; }
 
   async request(path, { method = 'GET', body } = {}) {
@@ -172,6 +174,21 @@ export class ParkingBackend {
   async setPaydayEvent(date, value) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return;
     await this.patchPath(this.paydayEventsPath(), { [date]: value ?? null });
+  }
+
+  async getAnnouncements() {
+    try { return (await this.request(this.announcementsPath())) || {}; }
+    catch (error) { if (error.status === 404) return {}; throw error; }
+  }
+  async addAnnouncement(id, value) {
+    await this.patchPath(this.announcementsPath(), { [id]: value });
+  }
+  async getPoolMatches() {
+    try { return (await this.request(this.poolMatchesPath())) || {}; }
+    catch (error) { if (error.status === 404) return {}; throw error; }
+  }
+  async addPoolMatch(id, value) {
+    await this.patchPath(this.poolMatchesPath(), { [id]: value });
   }
 
   async getGreenDeeds() {
