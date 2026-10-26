@@ -1,4 +1,4 @@
-const CACHE = 'gt-parking-shell-v18-community-board';
+const CACHE = 'gt-parking-shell-v20-compact-announcements';
 const SHELL = [
   './','./index.html','./styles.css','./styles/base.css','./styles/overview.css','./styles/schedule.css','./styles/dialogs.css','./styles/responsive.css','./styles/access.css','./access-gate.js','./app.js','./community-board.js','./community-board.css','./sync-diagnostics.js','./schedule-view.js','./room-dialog-controller.js','./config.js','./backend-adapter.js','./usage-meter.js','./booking-utils.js','./parking-map.js','./meeting-room.js',
   './parking-config.json','./drivers.txt','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./assets/goodtech-logo.webp','./robots.txt'
