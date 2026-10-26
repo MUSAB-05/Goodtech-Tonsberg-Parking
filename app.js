@@ -1,5 +1,6 @@
 import { APP_CONFIG } from './config.js';
 import { ParkingBackend } from './backend-adapter.js';
+import { initCommunityBoard } from './community-board.js';
 import { ParkingMap } from './parking-map.js';
 import { MeetingRoomView } from './meeting-room.js';
 import { RoomDialogController } from './room-dialog-controller.js';
@@ -23,7 +24,7 @@ let installPrompt = null;
 let lastConnectionError = '';
 const PENDING_KEY = 'gt-parking-pending-v1';
 const PAYDAY_SLOT_ID = 'payday-drinks';
-const PAYDAY_THRESHOLD = 4;
+const PAYDAY_THRESHOLD = 3;
 let pendingWrites = loadPendingWrites();
 let pendingFlushInFlight = false;
 let lastPaydayEventsRefresh = 0;
@@ -771,6 +772,7 @@ async function init() {
     state.groups = config.groups;
     state.meetingRoom = config.meetingRoom;
     state.drivers = parseDrivers(await driversResponse.text());
+    initCommunityBoard({ backend, drivers: state.drivers, toast });
     state.spaces = flattenSpaces(state.groups).sort((a, b) => a.displayOrder - b.displayOrder);
     const now = osloNow();
     state.today = now.date;
