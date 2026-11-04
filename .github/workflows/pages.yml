@@ -5,9 +5,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  pages: write
 concurrency:
   group: gt-parking-publish
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -23,4 +24,21 @@ jobs:
       - name: Verify shared backend and browser CORS
         run: npm run test:backend
       - name: Publish tested main to gh-pages
-        run: git push origin HEAD:gh-pages
+        id: publish
+        run: |
+          git fetch origin main gh-pages
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "A newer main commit exists; skipping this outdated publication."
+            exit 0
+          fi
+          git merge-base --is-ancestor origin/gh-pages HEAD || {
+            echo "gh-pages has unmerged changes. Merge and test them on main before publishing."
+            exit 1
+          }
+          git push origin HEAD:gh-pages
+          echo "published=true" >> "$GITHUB_OUTPUT"
+      - name: Request GitHub Pages build
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST repos/${{ github.repository }}/pages/builds

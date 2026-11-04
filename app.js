@@ -270,6 +270,7 @@ async function addGreenDeed(type) {
   try {
     await backend.addGreenDeed(id, entry);
     state.greenDeeds[id] = entry;
+    saveSnapshot();
     renderGreenDeeds();
     closeDialogSafe($('#green-deeds-dialog'));
     toast('🌱 Green deed added');
@@ -282,6 +283,10 @@ async function addGreenDeed(type) {
 function fingerprint(bookings) {
   return JSON.stringify(Object.entries(bookings || {}).sort(([a],[b]) => a.localeCompare(b)));
 }
+
+function isRateLimitError(error) { return error?.status === 429; }
+function rateLimitDetail() { return 'MantleDB is rate limited. Retrying after a 30 minute pause.'; }
+function rateLimitLabel() { return hasSnapshot ? 'Cached · rate limited' : 'Rate limited'; }
 
 function spaceById(id) { return state.spaces.find(space => space.id === id); }
 function driverById(id) { return state.drivers.find(driver => driver.id === id); }
@@ -333,6 +338,7 @@ async function loadSpaceFrequency(spaceId) {
     const missing = Object.entries(local).filter(([date, driverId]) => remote?.[date] !== driverId);
     Promise.allSettled(missing.map(([date, driverId]) => backend.setSpaceFrequency(spaceId, date, driverId)));
   } catch (error) {
+    noteRateLimit(error);
     state.spaceFrequency[spaceId] = { ...(state.spaceFrequency[spaceId] || {}), ...local };
     console.warn('Could not load parking frequency history', spaceId, error);
   }
@@ -344,6 +350,10 @@ function pendingValue(entry) {
   if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')) return entry.value ?? null;
   return entry ?? null;
 }
+function pendingExpected(entry) {
+  if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'expected')) return entry.expected;
+  return undefined;
+}
 function loadPendingWrites() {
   try {
     const parsed = JSON.parse(localStorage.getItem(PENDING_KEY) || '{}');
@@ -352,8 +362,10 @@ function loadPendingWrites() {
   } catch { return {}; }
 }
 function savePendingWrites() { localStorage.setItem(PENDING_KEY, JSON.stringify(pendingWrites)); }
-function queuePendingWrite(key, value) {
-  pendingWrites[key] = { value: value ?? null, queuedAt: new Date().toISOString() };
+function queuePendingWrite(key, value, expected = undefined) {
+  const entry = { value: value ?? null, queuedAt: new Date().toISOString() };
+  if (expected !== undefined) entry.expected = expected;
+  pendingWrites[key] = entry;
   savePendingWrites();
 }
 function clearPendingWrite(key) {
@@ -368,10 +380,14 @@ function applyPendingWrites(bookings) {
   }
   return merged;
 }
-async function persistShared(key, value) {
-  queuePendingWrite(key, value);
+async function persistShared(key, value, expected = undefined) {
+  queuePendingWrite(key, value, expected);
   try {
-    await backend.setBooking(key, value);
+    if (value == null && parkingKeyParts(key) && expected !== undefined) {
+      await backend.clearBookingIfMatches(key, expected);
+    } else {
+      await backend.setBooking(key, value);
+    }
     clearPendingWrite(key);
     return { synced: true };
   } catch (error) {
@@ -390,14 +406,26 @@ async function flushPendingWrites() {
         continue;
       }
       const value = pendingValue(entry);
+      const expected = pendingExpected(entry);
       try {
-        if (parkingKeyParts(key) && value?.driverId) await backend.claimBooking(key, value);
-        else await backend.setBooking(key, value);
+        if (parkingKeyParts(key) && value?.driverId) {
+          await backend.claimBooking(key, value);
+        } else if (parkingKeyParts(key) && value == null) {
+          // Legacy queued clears have no knowledge of what they originally cleared.
+          // Discard them rather than risking deletion of somebody's newer booking.
+          if (expected === undefined) {
+            clearPendingWrite(key);
+            continue;
+          }
+          await backend.clearBookingIfMatches(key, expected);
+        } else {
+          await backend.setBooking(key, value);
+        }
         clearPendingWrite(key);
         await recordFrequencyForBookingKey(key, value);
       } catch (error) {
-        if (error?.kind === 'busy') {
-          // Old offline claims must never overwrite a space that somebody else now owns.
+        if (error?.kind === 'busy' || error?.kind === 'stale') {
+          // Old offline changes must never overwrite or delete a newer shared booking.
           clearPendingWrite(key);
           continue;
         }
@@ -475,7 +503,8 @@ function renderPaydayMobile() {
     const day = formatDate(date, { weekday:'short' });
     const dateLabel = formatDate(date, { day:'numeric', month:'short' });
     const value = status.confirmed ? '🍻 17:00' : 'Vote';
-    return `<button type="button" class="payday-mobile-day ${status.confirmed ? 'confirmed' : ''} ${date === state.today ? 'today' : ''}" data-payday-mobile-date="${date}"><span>${esc(day)}</span><b>${esc(dateLabel)}</b><strong>${value}</strong></button>`;
+    const badge = status.count > 0 ? `<i class="payday-vote-count" aria-hidden="true">${status.count}</i>` : '';
+    return `<button type="button" class="payday-mobile-day ${status.confirmed ? 'confirmed' : ''} ${date === state.today ? 'today' : ''}" data-payday-mobile-date="${date}" aria-label="${esc(day)} ${esc(dateLabel)} Lønningspils${status.count > 0 ? `, ${status.count} vote${status.count === 1 ? '' : 's'}` : ''}"><span>${esc(day)}</span><b>${esc(dateLabel)}</b><strong>${value}</strong>${badge}</button>`;
   }).join('');
   container.innerHTML = `<div class="payday-mobile-head"><div><small>SOSIALT</small><strong>🍻 Lønningspils</strong></div></div><div class="payday-mobile-days">${days}</div>`;
   container.querySelectorAll('[data-payday-mobile-date]').forEach(button => button.addEventListener('click', () => openPaydayVotes(button.dataset.paydayMobileDate)));
@@ -542,6 +571,7 @@ async function togglePaydayVote(driverId) {
     } catch (summaryError) {
       console.warn('Could not update Lønningspils countdown', summaryError);
     }
+    saveSnapshot();
     render();
     renderPaydayDialog();
     if (value?.confirmed) toast('🍻 Lønningspils confirmed · 17:00');
@@ -635,6 +665,7 @@ async function updateParkingBooking(value) {
       await backend.claimBooking(key, value);
       state.bookings[key] = value;
       clearPendingWrite(key);
+      saveSnapshot();
       await recordFrequencyForBookingKey(key, value);
       $('#picker').close();
       state.selectedSpace = null;
@@ -643,7 +674,10 @@ async function updateParkingBooking(value) {
       toast(`${driverById(value.driverId)?.name || 'Employee'} assigned`);
     } catch (error) {
       if (error?.kind === 'busy') toast('Place is busy.');
-      else {
+      else if (noteRateLimit(error)) {
+        setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
+        toast('Shared storage is busy. Try again shortly.');
+      } else {
         setConnection(navigator.onLine === false ? 'Offline' : 'Sync issue', 'offline', error.message);
         toast('Could not claim the parking space. Try again.');
       }
@@ -665,11 +699,20 @@ async function updateParkingBooking(value) {
   mutationsInFlight++;
   render();
   try {
-    const result = await persistShared(key, null);
+    const result = await persistShared(key, null, current);
     if (result.synced) {
-      await recordFrequencyForBookingKey(key, null);
-      setConnection('Live', 'live', 'Shared bookings are synchronized.');
-      toast('Parking space cleared');
+      if (result.stale) {
+        setConnection('Live', 'live', 'A newer shared booking was protected from an old removal.');
+        toast('Booking changed. Nothing was cleared.');
+      } else {
+        await recordFrequencyForBookingKey(key, null);
+        saveSnapshot();
+        setConnection('Live', 'live', 'Shared bookings are synchronized.');
+        toast('Parking space cleared');
+      }
+    } else if (isRateLimitError(result.error)) {
+      setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
+      toast('Removal queued · sync will retry automatically');
     } else {
       setConnection('Sync pending', 'pending', `${result.error?.message || 'Shared storage unavailable'} Removal is saved on this device and will retry automatically.`);
       toast('Removal saved on this device · shared sync pending');
@@ -690,10 +733,11 @@ async function reloadBookings(force = false) {
   refreshInFlight = true;
   lastBookingsAttempt = Date.now();
   let syncError = null;
+
   try {
     if (Object.keys(pendingWrites).length) {
       try { await flushPendingWrites(); }
-      catch (error) { syncError = error; }
+      catch (error) { noteRateLimit(error); syncError = error; }
     }
     const months = visibleMonths();
     let nextBase = state.bookings || {};
@@ -734,7 +778,8 @@ async function reloadBookings(force = false) {
     state.bookings = applyPendingWrites(state.bookings);
     render();
     const pendingCount = Object.keys(pendingWrites).length;
-    setConnection(pendingCount ? `Sync pending (${pendingCount})` : (navigator.onLine === false ? 'Offline' : 'Sync issue'), pendingCount ? 'pending' : 'offline', error.message);
+    if (isRateLimitError(error)) setConnection(rateLimitLabel(), 'pending', rateLimitDetail());
+    else setConnection(pendingCount ? `Sync pending (${pendingCount})` : (navigator.onLine === false ? 'Offline' : 'Sync issue'), pendingCount ? 'pending' : 'offline', error.message);
   } finally {
     refreshInFlight = false;
   }

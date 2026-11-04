@@ -85,7 +85,41 @@ test('app keeps the existing shared storage and live polling behind the access g
 
 test('sync diagnostics tests browser reachability, authenticated API and queued writes', async()=>{
   const [diag,css]=await Promise.all([read('sync-diagnostics.js'),read('styles/dialogs.css')]);
-  assert.match(diag,/mode: 'no-cors'/); assert.match(diag,/backend\.healthCheck/); assert.match(diag,/backend\.setBookings/); assert.match(diag,/Queue reconciliation/); assert.match(css,/diagnostics-output/);
+  assert.match(diag,/mode: 'no-cors'/); assert.match(diag,/backend\.healthCheck/); assert.match(diag,/clearBookingIfMatches/); assert.match(diag,/Protected legacy clear/); assert.match(diag,/Queue reconciliation/); assert.match(css,/diagnostics-output/);
+});
+
+test('polling retains main idle and rate-limit budgets', async()=>{
+  const [config,app]=await Promise.all([read('config.js'),read('app.js')]);
+  assert.match(config,/pollMs: 360000/);
+  assert.match(app,/IDLE_MS = 60 \* 1000/);
+  assert.match(app,/RATE_LIMIT_PAUSE_MS = 30 \* 60 \* 1000/);
+  assert.match(app,/Date\.now\(\) < rateLimitUntil/);
+});
+
+test('last successful shared state is cached locally instead of showing an empty board on backend failure', async()=>{
+  const app=await read('app.js');
+  assert.match(app,/SNAPSHOT_KEY = 'gt-parking-last-known-v1'/);
+  assert.match(app,/loadSnapshot/);
+  assert.match(app,/saveSnapshot/);
+  assert.match(app,/Showing last saved bookings/);
+  assert.match(app,/gotRemote/);
+});
+
+test('deployment tolerates only Mantle rate limiting and keepalive does not fire on every push', async()=>{
+  const [smoke,keepalive]=await Promise.all([read('scripts/backend-smoke.mjs'),read('.github/workflows/mantle-keepalive.yml')]);
+  assert.match(smoke,/error\?\.status === 429/);
+  assert.match(smoke,/live backend smoke is deferred/);
+  assert.doesNotMatch(keepalive,/push:/);
+  assert.match(keepalive,/schedule:/);
+});
+
+test('offline parking clears carry the original booking and cannot delete newer data', async()=>{
+  const [app,backend]=await Promise.all([read('app.js'),read('backend-adapter.js')]);
+  assert.match(app,/persistShared\(key, null, current\)/);
+  assert.match(app,/pendingExpected/);
+  assert.match(app,/clearBookingIfMatches/);
+  assert.match(backend,/clearBookingIfMatches/);
+  assert.match(backend,/staleError/);
 });
 
 test('robots discourages indexing', async()=>{ assert.match(await read('robots.txt'),/Disallow: \//); });
@@ -106,9 +140,9 @@ test('install button has a reliable mobile fallback when native prompt is unavai
 test('lønningspils voting is shown above parking and confirms at three people for 17:00 without exposing threshold counts', async()=>{
   const [html,app,schedule,css]=await Promise.all([read('index.html'),read('app.js'),read('schedule-view.js'),read('styles/schedule.css')]);
   assert.match(html,/id="payday-dialog"/); assert.match(html,/id="payday-mobile"/);
-  assert.match(schedule,/Lønningspils/); assert.match(schedule,/paydayRow/); assert.match(schedule,/PAYDAY_THRESHOLD = 3/); assert.match(schedule,/'Vote'/); assert.doesNotMatch(schedule,/3 personer|\/\$\{PAYDAY_THRESHOLD\}/);
-  assert.match(app,/PAYDAY_THRESHOLD = 3/); assert.match(app,/startHour: 17/); assert.match(app,/togglePaydayVote/); assert.match(app,/driver\.id !== 'guest'/); assert.match(app,/'Vote'/); assert.doesNotMatch(app,/3 personer|trenger \$\{PAYDAY_THRESHOLD/);
-  assert.match(css,/payday-cell\.confirmed/); assert.match(css,/payday-mobile/);
+  assert.match(schedule,/Lønningspils/); assert.match(schedule,/paydayRow/); assert.match(schedule,/PAYDAY_THRESHOLD = 3/); assert.match(schedule,/'Vote'/); assert.match(schedule,/count > 0 \? \`<i class="payday-vote-count"/); assert.doesNotMatch(schedule,/3 personer|\/\$\{PAYDAY_THRESHOLD\}/);
+  assert.match(app,/PAYDAY_THRESHOLD = 3/); assert.match(app,/startHour: 17/); assert.match(app,/togglePaydayVote/); assert.match(app,/driver\.id !== 'guest'/); assert.match(app,/'Vote'/); assert.match(app,/status\.count > 0 \? \`<i class="payday-vote-count"/); assert.doesNotMatch(app,/3 personer|trenger \$\{PAYDAY_THRESHOLD/);
+  assert.match(css,/payday-cell\.confirmed/); assert.match(css,/payday-mobile/); assert.match(css,/\.payday-vote-count\{position:absolute/);
 });
 
 

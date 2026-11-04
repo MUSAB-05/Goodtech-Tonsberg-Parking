@@ -85,3 +85,37 @@ test('backend reports network failures as a shared-storage issue', async()=>{
   const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl:async()=>{throw new TypeError('network')}});
   await assert.rejects(()=>backend.getBookings(['2026-09']),/Shared storage is unreachable/);
 });
+
+
+test('guarded clear removes only the exact booking that was originally cleared', async()=>{
+  const key='2026-09-29__mg-69';
+  const original={driverId:'mustafa',updatedAt:'2026-09-29T06:00:00.000Z'};
+  let stored={[key]:original};
+  const fetchImpl=async(url,options={})=>{
+    const method=options.method||'GET';
+    if(method==='GET') return response(200,stored);
+    if(method==='PATCH'){stored={...stored,...JSON.parse(options.body)};return response(200,{});}
+    return response(200,{});
+  };
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl});
+  await backend.clearBookingIfMatches(key,original);
+  assert.equal(stored[key],null);
+});
+
+test('stale offline clear cannot delete a newer parking booking', async()=>{
+  const key='2026-09-29__mg-69';
+  const oldBooking={driverId:'mustafa',updatedAt:'2026-09-29T06:00:00.000Z'};
+  const newerBooking={driverId:'jens',updatedAt:'2026-09-29T06:05:00.000Z'};
+  let stored={[key]:newerBooking};
+  let patches=0;
+  const fetchImpl=async(url,options={})=>{
+    const method=options.method||'GET';
+    if(method==='GET') return response(200,stored);
+    if(method==='PATCH'){patches++;stored={...stored,...JSON.parse(options.body)};return response(200,{});}
+    return response(200,{});
+  };
+  const backend=new ParkingBackend({baseUrl:'https://example.test/v2',namespace:'parking',key:'test-key',fetchImpl});
+  await assert.rejects(()=>backend.clearBookingIfMatches(key,oldBooking),error=>error?.kind==='stale');
+  assert.equal(patches,0);
+  assert.equal(stored[key].driverId,'jens');
+});
