@@ -2,7 +2,7 @@ import { bookingKey, formatDate, normalAllocationUsage, roomAvailability } from 
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const PAYDAY_SLOT_ID = 'payday-drinks';
-const PAYDAY_THRESHOLD = 4;
+const PAYDAY_THRESHOLD = 3;
 
 export class ScheduleView {
   constructor(container, { state, dayBookings, duplicatesFor, openPicker, selectDate, openRoomDetails, openPaydayVotes }) {
