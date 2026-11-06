@@ -20,3 +20,13 @@
 .announcements-toggle{border:1px solid var(--line);background:var(--panel-2);color:var(--text);border-radius:9px;padding:7px 12px;font-size:.78rem;font-weight:850;cursor:pointer;min-height:36px}
 .announcements-toggle:hover{border-color:var(--accent);background:var(--accent-soft)}
 #announcements-extra[hidden]{display:none!important}
+
+.pool-recent h3{margin:14px 0 8px;font-size:.9rem}
+.pool-match{border-bottom:1px solid var(--line)}
+.pool-match summary{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;font-size:.85rem}
+.pool-match summary::-webkit-details-marker{display:none}
+.pool-match time{margin-left:auto;color:var(--muted);font-size:.75rem;white-space:nowrap}
+.pool-edit-arrow{color:var(--accent);padding:0 8px}
+.pool-match[open] .pool-edit-arrow{transform:rotate(180deg)}
+.pool-form-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:700px){.pool-form-actions{grid-column:1/-1}.pool-form-actions button{flex:1}}

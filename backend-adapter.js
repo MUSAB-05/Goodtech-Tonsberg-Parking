@@ -192,7 +192,7 @@ export class ParkingBackend {
     try { return (await this.request(this.poolMatchesPath())) || {}; }
     catch (error) { if (error.status === 404) return {}; throw error; }
   }
-  async addPoolMatch(id, value) {
+  async setPoolMatch(id, value) {
     await this.patchPath(this.poolMatchesPath(), { [id]: value });
   }
 
