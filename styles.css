@@ -109,3 +109,36 @@ body{background:#080f1c;font-size:14px}h1,h2,h3{font-weight:750;letter-spacing:-
   .space-name strong{font-size:17px}
   .space-name small{font-size:13px}
 }
+
+/* Equal desktop panels and readable overview cards. */
+@media(min-width:1450px){
+  main{grid-template-columns:repeat(3,minmax(0,1fr))}
+  main>#pool-board{max-height:none;overflow:visible}
+  .parking-map{grid-template-columns:1fr;gap:12px}
+  .f18-stack{grid-template-columns:1fr 1fr;grid-template-rows:1fr;gap:12px}
+  .map-f18-ovreplan .map-spaces{grid-template-columns:1fr}
+  .mg-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(5,60px);gap:8px 18px}
+  .mg-right-stack{grid-template-rows:repeat(5,60px);gap:8px}
+  .map-space{min-height:60px;padding:9px 12px}
+  .map-space-label{font-size:15px}
+  .map-space b{font-size:19px}
+  .room-slot{min-height:42px;padding:6px 8px}
+  .room-slot span,.room-slot b{font-size:16px}
+  .room-slot i{height:15px}
+  .room-head{margin-bottom:16px}
+  .hero-row{grid-template-columns:minmax(210px,.85fr) minmax(430px,1.65fr) minmax(400px,1.5fr);gap:12px;align-items:stretch}
+  .hero-date h2{font-size:26px;line-height:1.2}
+  .hero-date .eyebrow{font-size:12px;margin-bottom:8px}
+  .hero-event-card,.green-deeds-card{min-height:96px;padding:15px 16px;row-gap:7px;column-gap:12px}
+  .hero-event-card>span,.green-deeds-card>span{font-size:12px;line-height:1.2}
+  .hero-event-card>strong,.green-deeds-card>strong{font-size:18px;line-height:1.25}
+  .hero-event-card>b,.green-deeds-card>b{font-size:23px}
+  .summary-item{min-height:96px;padding:14px 12px;gap:9px;align-content:center;font-size:15px;line-height:1.25}
+  .summary-item strong{font-size:19px;line-height:1.25}
+}
+@media(min-width:701px) and (max-width:1449px){
+  .hero-event-card,.green-deeds-card,.summary-item{min-height:76px;padding:12px}
+  .hero-event-card>strong,.green-deeds-card>strong,.summary-item strong{font-size:16px}
+  .hero-event-card>b,.green-deeds-card>b{font-size:20px}
+  .summary-item{font-size:13px}
+}
