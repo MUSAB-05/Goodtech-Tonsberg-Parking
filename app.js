@@ -798,13 +798,6 @@ function shiftWeek(amount) {
   reloadBookings(true);
 }
 
-function applyTheme(theme) {
-  document.body.classList.toggle('light', theme === 'light');
-  localStorage.setItem('gt-parking-theme', theme);
-  $('#theme-toggle').textContent = theme === 'light' ? '☾' : '☼';
-  $('#theme-toggle').setAttribute('aria-label', theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
-}
-
 async function init() {
   try {
     setConnection('Connecting…', 'checking', 'Checking shared storage.');
@@ -841,7 +834,6 @@ $('#next-week').addEventListener('click', () => shiftWeek(1));
 $('#today-week')?.addEventListener('click', goToday);
 $('#driver-search').addEventListener('input', renderDrivers);
 $('#clear-booking').addEventListener('click', clearParkingBooking);
-$('#theme-toggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
 document.addEventListener('click', event => {
   const greenCard = event.target.closest?.('#green-deeds');
   if (greenCard) {
@@ -951,7 +943,6 @@ if ('serviceWorker' in navigator) {
     .then(registration => registration.update())
     .catch(console.error);
 }
-applyTheme(localStorage.getItem('gt-parking-theme') || 'dark');
 function markIdle() {
   if (idle || refreshInFlight || mutationsInFlight) return;
   idle = true;
