@@ -31,3 +31,38 @@ body{background:#080f1c;font-size:14px}h1,h2,h3{font-weight:750;letter-spacing:-
 @media(min-width:1700px){.overview-grid{grid-template-columns:minmax(0,3fr) minmax(320px,1fr)}.parking-map{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.f18-stack{grid-template-columns:1fr 1fr;grid-template-rows:1fr}.map-group-title{font-size:15px}.map-space b{font-size:16px}}
 @media(max-width:1150px){.hero-row{grid-template-columns:1fr 1fr}.hero-date{grid-column:1/-1}.summary{grid-column:2;grid-row:2}.overview-grid{grid-template-columns:1fr}.room-scale{grid-template-columns:1fr 1fr;gap:4px 18px}.parking-map{grid-template-columns:1.4fr 1fr}}
 @media(max-width:700px){.topbar,main{width:calc(100% - 16px)}.topbar{padding:10px 0;display:flex;flex-wrap:wrap}.brand{display:flex;gap:8px}.goodtech-logo{width:95px}.brand-copy h1{font-size:16px}.top-actions{width:auto;margin-left:auto;gap:8px}.connection{font-size:11px}.community-panel{padding:9px;margin-bottom:8px}.announcement-full{padding:8px}.announcement-full strong{font-size:14px}.announcement-full p{font-size:13px;line-height:1.4}.community-head h2{font-size:16px}.announcements-toggle{min-height:44px}.hero-row{grid-template-columns:1fr;gap:7px;margin:8px 0}.hero-date,.hero-status,.summary{grid-column:1;grid-row:auto}.hero-date h2{font-size:18px}.hero-date .eyebrow{display:none}.hero-status{grid-template-columns:1fr 1fr}.hero-event-card,.green-deeds-card{min-height:50px;padding:7px}.hero-event-card>strong,.green-deeds-card>strong{font-size:12px}.summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.summary-item{min-height:46px;font-size:10px;padding:6px}.summary-item strong{font-size:11px}.summary-item:nth-child(3){grid-column:auto}.overview-grid{gap:8px}.map-shell,.room-shell{padding:8px}.map-heading{grid-template-columns:44px minmax(0,1fr) auto 44px;gap:5px}.map-heading strong{font-size:12px}.parking-map{grid-template-columns:1fr;gap:7px}.map-group{padding:7px}.map-group-title{font-size:12px}.map-group-title em{font-size:11px}.mg-layout{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);grid-template-rows:repeat(5,46px);padding:7px;gap:5px 12px;min-height:0}.mg-right-stack{grid-template-rows:repeat(5,46px);gap:5px}.map-space{min-height:46px;padding:5px 7px}.map-space-label{font-size:11px}.map-space b{font-size:13px}.f18-stack{grid-template-columns:1fr 1fr;grid-template-rows:1fr;gap:7px}.map-f18-ovreplan .map-spaces{grid-template-columns:1fr}.room-scale{grid-template-columns:1fr 1fr;gap:3px 8px}.room-slot{min-height:40px;grid-template-columns:36px 1fr;gap:2px 4px}.room-slot span{font-size:11px}.room-slot b{font-size:11px}.room-head h3{font-size:16px}.payday-mobile{width:100%;margin:0 0 8px;border-radius:8px}.picker{width:calc(100% - 16px)}.schedule-panel{display:none!important}}
+
+/* Wide desktop: useful columns instead of stretching the parking map. */
+@media(min-width:1450px){
+  .topbar,main{width:calc(100% - 48px);max-width:2400px}
+  main{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,.8fr) minmax(340px,1fr);gap:14px}
+  main>#announcements{grid-column:1/-1;grid-row:1;margin:0}
+  main>.hero-row{grid-column:1/-1;grid-row:2;margin:0}
+  main>.overview-grid{display:contents}
+  #parking-map{grid-column:1;grid-row:3;min-width:0}
+  #meeting-room{grid-column:2;grid-row:3;min-width:0}
+  main>#pool-board{grid-column:3;grid-row:3;margin:0;max-height:460px;overflow:auto;overscroll-behavior:contain}
+  main>.schedule-panel{grid-column:1/-1;grid-row:4;margin:0 0 16px}
+  .parking-map{grid-template-columns:minmax(0,1.35fr) minmax(180px,1fr)}
+  .f18-stack{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .map-group-title{font-size:13px}
+  .mg-layout{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);grid-template-rows:repeat(5,54px)}
+  .mg-right-stack{grid-template-rows:repeat(5,54px)}
+  .map-space{min-height:54px}
+  .map-space b{font-size:15px}
+  .room-slot{min-height:27px;grid-template-columns:42px minmax(20px,1fr) minmax(65px,100px);gap:6px}
+  #pool-board .community-head{align-items:start;flex-wrap:wrap;gap:4px}
+  #pool-board .pool-form{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  #pool-board .pool-form>button,#pool-board .pool-form-actions{grid-column:1/-1}
+  #pool-board .pool-table th,#pool-board .pool-table td{padding:8px 5px}
+  #pool-board .pool-table th{font-size:11px}
+  #pool-board .pool-table td{font-size:13px}
+  .schedule-row{grid-template-columns:190px repeat(var(--days),minmax(120px,1fr))}
+  .schedule-cell,.room-week-cell{min-height:78px;padding:12px}
+  .day-head{min-height:70px;padding:12px}
+  .schedule-cell span{font-size:16px}
+  .schedule-cell small{font-size:12px;max-width:100%}
+  .space-name strong{font-size:15px}
+  .space-name small{font-size:12px}
+  .room-week-bar{height:22px}
+}
