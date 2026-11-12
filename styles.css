@@ -66,3 +66,46 @@ body{background:#080f1c;font-size:14px}h1,h2,h3{font-weight:750;letter-spacing:-
   .space-name small{font-size:12px}
   .room-week-bar{height:22px}
 }
+
+/* Comfortable reading width and type on desktop monitors. */
+@media(min-width:1450px){
+  .topbar,main{max-width:1840px}
+  body{font-size:16px}
+  main{grid-template-columns:minmax(0,2fr) minmax(300px,.85fr) minmax(360px,1.05fr)}
+  .brand-copy h1{font-size:26px}
+  .subtitle,.connection{font-size:14px}
+  .community-head h2{font-size:20px}
+  .announcement-full strong{font-size:18px}
+  .announcement-full p{font-size:16px;line-height:1.5}
+  .announcement-full small,.announcement-compact small{font-size:14px}
+  .hero-date h2{font-size:24px}
+  .eyebrow{font-size:11px}
+  .hero-event-card>span,.green-deeds-card>span{font-size:11px}
+  .hero-event-card>strong,.green-deeds-card>strong{font-size:15px}
+  .hero-event-card>b,.green-deeds-card>b{font-size:18px}
+  .summary-item{font-size:13px}
+  .summary-item strong{font-size:14px}
+  .map-heading strong{font-size:18px}
+  .map-group-title{font-size:15px}
+  .map-group-title em{font-size:13px}
+  .map-space-label{font-size:14px}
+  .map-space b{font-size:17px}
+  .map-space small{font-size:12px}
+  .room-head h3{font-size:20px}
+  .room-head strong{font-size:14px}
+  .room-slot span,.room-slot b{font-size:14px}
+  .room-slot{grid-template-columns:48px minmax(20px,1fr) minmax(75px,110px);min-height:29px}
+  .room-all-free,.room-details-link{font-size:14px}
+  main>#pool-board{max-height:490px}
+  #pool-board .community-head span,#pool-board .pool-form label{font-size:14px}
+  #pool-board .pool-table th{font-size:13px}
+  #pool-board .pool-table td{font-size:15px}
+  #pool-board .pool-match summary{font-size:15px}
+  #pool-board .pool-match time{font-size:13px}
+  .schedule-cell span{font-size:18px}
+  .schedule-cell small{font-size:13px}
+  .day-head span{font-size:14px}
+  .day-head b{font-size:18px}
+  .space-name strong{font-size:17px}
+  .space-name small{font-size:13px}
+}
