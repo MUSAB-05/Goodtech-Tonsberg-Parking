@@ -33,7 +33,7 @@ export class ScheduleView {
     const note = confirmed ? 'Lønningspils!' : '';
     const voteLabel = count > 0 ? `, ${count} vote${count === 1 ? '' : 's'}` : '';
     const badge = count > 0 ? `<i class="payday-vote-count" aria-hidden="true">${count}</i>` : '';
-    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${confirmed ? 'bekreftet kl. 17:00' : 'åpen for valg'}${voteLabel}"><span>${main}</span>${note ? `<small>${note}</small>` : ''}${badge}</button>`;
+    return `<button class="${classes}" data-payday-date="${date}" aria-label="Lønningspils ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}, ${confirmed ? 'confirmed at 17:00' : 'open for votes'}${voteLabel}"><span>${main}</span>${note ? `<small>${note}</small>` : ''}${badge}</button>`;
   }
 
   roomWeekBar(date) {
@@ -49,7 +49,7 @@ export class ScheduleView {
       return `<button class="day-head ${selected ? 'selected' : ''} ${today ? 'today' : ''}" data-date="${date}"><span>${esc(formatDate(date, { weekday:'short' }))}${today ? ' · TODAY' : ''}</span><b>${esc(formatDate(date, { day:'numeric', month:'short' }))}</b></button>`;
     }).join('');
 
-    const paydayRow = `<div class="schedule-row payday-row"><div class="space-name"><small>SOSIALT</small><strong>🍻 Lønningspils</strong></div>${this.state.week.map(date => this.paydayCell(date)).join('')}</div>`;
+    const paydayRow = `<div class="schedule-row payday-row"><div class="space-name"><small>SOCIAL</small><strong>🍻 Lønningspils</strong></div>${this.state.week.map(date => this.paydayCell(date)).join('')}</div>`;
 
     const orderedSpaces = [...this.state.spaces].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
     const rows = orderedSpaces.map(space => {
@@ -69,9 +69,14 @@ export class ScheduleView {
     }).join('');
 
     const roomRow = `<div class="schedule-row meeting-room-row"><div class="space-name"><small>BOOKABLE</small><strong>Meeting room</strong></div>${this.state.week.map(date => `<button class="room-week-cell ${date === this.state.today ? 'today' : ''} ${date === this.state.selectedDate ? 'selected' : ''}" data-room-day="${date}" aria-label="Meeting room ${esc(formatDate(date,{weekday:'long',day:'numeric',month:'long'}))}">${this.roomWeekBar(date)}</button>`).join('')}</div>`;
-    this.container.innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking / room</div>${head}</div>${paydayRow}${rows}${roomRow}</div>`;
+    this.container.innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Parking / room</div>${head}</div>${rows}${roomRow}</div>`;
     this.container.querySelectorAll('.day-head[data-date]').forEach(el => el.addEventListener('click', () => this.selectDate(el.dataset.date)));
-    this.container.querySelectorAll('[data-payday-date]').forEach(el => el.addEventListener('click', () => this.openPaydayVotes(el.dataset.paydayDate)));
+    const paydayContainer = document.querySelector('#payday-schedule');
+    if (paydayContainer) {
+      paydayContainer.innerHTML = `<div class="schedule-grid" style="--days:7"><div class="schedule-row schedule-head"><div class="space-name">Social calendar</div>${head}</div>${paydayRow}</div>`;
+      paydayContainer.querySelectorAll('.day-head[data-date]').forEach(el => el.addEventListener('click', () => this.selectDate(el.dataset.date)));
+      paydayContainer.querySelectorAll('[data-payday-date]').forEach(el => el.addEventListener('click', () => this.openPaydayVotes(el.dataset.paydayDate)));
+    }
     this.container.querySelectorAll('[data-space-id]').forEach(el => el.addEventListener('click', () => this.openPicker(el.dataset.spaceId, el.dataset.date)));
     this.container.querySelectorAll('[data-room-day]').forEach(el => el.addEventListener('click', () => this.openRoomDetails(null, el.dataset.roomDay)));
   }

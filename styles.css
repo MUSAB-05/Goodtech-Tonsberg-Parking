@@ -142,3 +142,21 @@ body{background:#080f1c;font-size:14px}h1,h2,h3{font-weight:750;letter-spacing:-
   .hero-event-card>b,.green-deeds-card>b{font-size:20px}
   .summary-item{font-size:13px}
 }
+
+/* Fit complete names and duplicate warnings inside each physical parking slot. */
+.mg-layout{grid-template-rows:repeat(5,minmax(76px,auto));min-height:0}
+.mg-right-stack{grid-template-rows:repeat(5,minmax(76px,auto))}
+.map-space{height:auto;min-height:64px}
+.map-space b,.map-space small{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.map-space b{line-height:1.3}
+.map-space small{line-height:1.25}
+@media(min-width:1450px){
+  main>.payday-calendar{grid-column:1/-1;grid-row:4;margin:0}
+  main>.schedule-panel:not(.payday-calendar){grid-row:5}
+  .mg-layout{grid-template-rows:repeat(5,minmax(84px,auto))}
+  .mg-right-stack{grid-template-rows:repeat(5,minmax(84px,auto))}
+}
+@media(max-width:700px){
+  .mg-layout,.mg-right-stack{grid-template-rows:repeat(5,minmax(60px,auto))}
+  .map-space{min-height:54px}
+}

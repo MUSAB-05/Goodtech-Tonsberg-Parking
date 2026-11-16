@@ -189,9 +189,11 @@ function renderEventCountdown() {
   if (!element || !state.today) return;
 
   const payday = confirmedPaydayDates()[0];
-  const event = payday
-    ? { name:'Lønningspils', icon:'🍻', date:payday }
-    : holidayCandidates(state.today)[0];
+  const planned = [
+    { name:'Julebord Oslo', icon:'🎄', date:'2026-12-04' },
+    ...(payday ? [{ name:'Lønningspils', icon:'🍻', date:payday }] : [])
+  ].filter(event => event.date >= state.today).sort((a,b) => a.date.localeCompare(b.date));
+  const event = planned[0] || holidayCandidates(state.today)[0];
 
   if (!event) {
     element.textContent = '';
@@ -829,6 +831,9 @@ async function init() {
   }
 }
 
+$('#payday-previous-week').addEventListener('click', () => shiftWeek(-1));
+$('#payday-next-week').addEventListener('click', () => shiftWeek(1));
+$('#payday-today-week').addEventListener('click', goToday);
 $('#previous-week').addEventListener('click', () => shiftWeek(-1));
 $('#next-week').addEventListener('click', () => shiftWeek(1));
 $('#today-week')?.addEventListener('click', goToday);
